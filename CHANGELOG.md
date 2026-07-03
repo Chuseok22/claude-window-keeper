@@ -5,6 +5,21 @@ All notable changes to this project should be documented here.
 This project uses version tags such as `v0.2.0`. Release binaries are published
 through GitHub Actions and GoReleaser.
 
+## v0.6.0
+
+- Added `limitping continue <provider>`, an interactive proxy that launches the
+  provider's real CLI through a PTY (your terminal passes straight through) and
+  auto-injects a continue message the moment the 5h limit recovers, so a parked
+  long task resumes itself instead of waiting for you. Flags after the provider
+  pass through verbatim (e.g. `continue codex --yolo`). It only fires on a
+  genuine recovery edge and respects the weekly limit (`weekly_threshold`,
+  credits included), writing a diagnostic timeline to `continue.log`. The resume
+  message is the new per-provider `continue_prompt` config key (default
+  `"continue"`). Unix only for now (needs a PTY).
+- Shared the "weekly window exhausted" rule between the scheduler and the
+  continue proxy via `usage.Usage.WeeklyExhausted`, so both honor
+  `weekly_threshold` and usable credits identically.
+
 ## v0.5.0
 
 - Added `status --json`, which emits each provider's 5h/weekly usage, plan,

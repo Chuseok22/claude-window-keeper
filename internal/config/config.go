@@ -37,6 +37,10 @@ type ProviderConfig struct {
 	Model           string   `toml:"model"`
 	ReasoningEffort string   `toml:"reasoning_effort"`
 	AlignStart      string   `toml:"align_start"`
+	// ContinuePrompt is the message injected into a proxied session
+	// (`limitping continue <provider>`) when the 5h limit recovers.
+	// Empty falls back to "continue".
+	ContinuePrompt string `toml:"continue_prompt"`
 }
 
 // Config is the full configuration.
@@ -62,16 +66,18 @@ func Default() Config {
 		ResetBuffer:     Duration{10 * time.Second},
 		Notify:          true,
 		Claude: ProviderConfig{
-			Enabled:   true,
-			Prompt:    ".",
-			Model:     "haiku",
-			ExtraArgs: []string{},
+			Enabled:        true,
+			Prompt:         ".",
+			Model:          "haiku",
+			ExtraArgs:      []string{},
+			ContinuePrompt: "continue",
 		},
 		Codex: ProviderConfig{
 			Enabled:         true,
 			Prompt:          "ok",
 			Model:           "gpt-5.4-mini",
 			ReasoningEffort: "low",
+			ContinuePrompt:  "continue",
 		},
 		Spark: ProviderConfig{
 			Enabled:         false,
@@ -181,6 +187,9 @@ model = "haiku"
 extra_args = []
 # Optional RFC3339 anchor for the first window's phase; empty = start ASAP.
 align_start = ""
+# Message injected to resume a proxied session when the 5h limit recovers
+# (limitping continue claude). Empty = "continue".
+continue_prompt = "continue"
 
 [codex]
 enabled = true
@@ -193,6 +202,8 @@ model = "gpt-5.4-mini"
 reasoning_effort = "low"
 extra_args = []
 align_start = ""
+# Message injected to resume a proxied session when the 5h limit recovers.
+continue_prompt = "continue"
 
 [spark]
 # Spark is a separate watch target backed by the Codex CLI and credentials.

@@ -39,6 +39,12 @@ type cliText struct {
 	watchLiveFlag          string
 	watchAlreadyRunningFmt string
 
+	// `continue` interactive proxy strings.
+	continueShort       string
+	continueLong        string
+	continueBadProvider string
+	continueStartedFmt  string
+
 	bgShort          string
 	bgLong           string
 	bgExample        string
@@ -203,6 +209,23 @@ Examples:
 	watchDryRunFlag:        "log when pings would fire without sending them",
 	watchLiveFlag:          "show a live heartbeat/status line while watching (uses more power)",
 	watchAlreadyRunningFmt: "watch already running (pid %d, provider %s%s, started %s); stop it before starting another watcher",
+
+	continueShort: "Proxy a provider's CLI and auto-continue its task when the 5h limit recovers",
+	continueLong: `Launch a provider's interactive CLI through limitping. Your terminal is passed straight through — you drive Codex / Claude Code exactly as usual — while limitping watches usage in the background and, when the 5h limit recovers after being hit, sends your continue message so a long task resumes itself instead of sitting parked.
+
+Arguments:
+  provider     Required. One of: claude, codex.
+  cli args...  Optional. Any flags after the provider are forwarded to the CLI
+               verbatim, e.g. 'limitping continue codex --yolo'.
+
+The continue message is per-provider continue_prompt in the config (default "continue"; set it to e.g. "继续任务"). Quit from inside the CLI to exit.
+
+Examples:
+  limitping continue codex
+  limitping continue codex --yolo
+  limitping continue claude --dangerously-skip-permissions`,
+	continueBadProvider: "invalid provider (want claude or codex):",
+	continueStartedFmt:  "Proxying %s with auto-continue on 5h-limit recovery (message: %q). Use it as usual; quit from inside the CLI to exit.\n",
 
 	bgShort: "Run watch in the background — start | stop | status | logs",
 	bgLong: `Run the watch daemon detached from the terminal so it keeps pinging across 5h windows after you close the shell.
@@ -378,6 +401,23 @@ var zhText = cliText{
 	watchDryRunFlag:        "只记录何时会触发，不真正发送",
 	watchLiveFlag:          "显示实时心电图状态行（会增加耗电）",
 	watchAlreadyRunningFmt: "watch 已在运行（pid %d，Provider %s%s，启动于 %s）；请先停止已有 watcher 再启动新的",
+
+	continueShort: "代理该 Provider 的 CLI，并在 5h 限额恢复时自动续跑任务",
+	continueLong: `通过 limitping 启动该 Provider 的交互式 CLI。你的终端会被原样透传——照常使用 Codex / Claude Code——同时 limitping 在后台监测用量，当 5h 限额（曾打满）恢复时自动发送续跑消息，让长任务自己接着跑，而不是停在限额处。
+
+参数:
+  provider     必填。取值: claude、codex。
+  cli args...  可选。Provider 后面的参数会原样转发给该 CLI，例如
+               'limitping continue codex --yolo'。
+
+续跑消息取配置中各 Provider 的 continue_prompt（默认 "continue"，可改成如 "继续任务"）。退出请用该 CLI 自带的退出方式。
+
+示例:
+  limitping continue codex
+  limitping continue codex --yolo
+  limitping continue claude --dangerously-skip-permissions`,
+	continueBadProvider: "无效的 Provider（应为 claude 或 codex）：",
+	continueStartedFmt:  "正在代理 %s，5h 限额恢复后会自动续跑（消息：%q）。照常使用；退出请用该 CLI 自带的退出方式。\n",
 
 	bgShort: "在后台运行 watch —— start | stop | status | logs",
 	bgLong: `以脱离终端的方式在后台运行 watch 守护进程，关闭终端后仍会在每个 5h 窗口重置时持续 ping。

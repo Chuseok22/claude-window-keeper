@@ -57,3 +57,14 @@ type Usage struct {
 func (u *Usage) CreditsUsable() bool {
 	return u.Credits != nil && (u.Credits.Unlimited || u.Credits.HasCredits)
 }
+
+// WeeklyExhausted reports whether the weekly window should block new work: its
+// utilization is at/above threshold (0..1, e.g. cfg.WeeklyThreshold) and no
+// usable credits remain. Shared by the scheduler's ping skip and the continue
+// proxy's recovery gate so "weekly is spent" means the same thing everywhere.
+func (u *Usage) WeeklyExhausted(threshold float64) bool {
+	if u.CreditsUsable() {
+		return false
+	}
+	return u.Weekly.UsedPercent/100 >= threshold
+}

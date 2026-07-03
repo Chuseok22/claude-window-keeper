@@ -35,6 +35,8 @@ spark   ✓ pinged (12.4s)
 - `status` / `bg status` 会展示 5h 与周用量、重置倒计时以及后台监听状态。
 - 通过只读用量端点读取状态,通过官方 Claude Code / Codex CLI 触发窗口,复用已有登录态。
 - 通过 CLI 钩子识别正在进行中的 Claude/Codex 会话;Spark 通过 Codex CLI 运行,复用 Codex 钩子信号。
+- 自动续跑挂起的任务:`limitping continue <provider>` 代理官方 CLI,在 5h 限额恢复的
+  瞬间自动输入续跑消息,让整夜的任务不用一直停在限额处等你回来。
 - 内置 dry-run、周限额保护、重置缓冲、低成本模型默认值、macOS 通知、本地配置,且不带遥测。
 
 ## 快速开始
@@ -164,6 +166,9 @@ limitping watch                # 前台守护:在每个窗口重置时自动 pin
 limitping watch claude         # 只监测某一个 Provider(claude|codex|spark)
 limitping watch --live         # 可选:显示实时心电图状态行
 limitping watch --dry-run      # 只记录何时会触发,不真正发送
+limitping continue codex       # 代理 CLI;5h 限额恢复时自动续跑任务
+limitping continue codex --yolo             # Provider 后面的参数原样透传
+limitping continue claude --dangerously-skip-permissions
 limitping bg start             # 在后台运行 watch,释放终端
 limitping bg status            # 是否在运行?并列出各 Provider 用量(等同于 limitping bg)
 limitping bg logs -f           # 持续查看后台监听的日志
@@ -267,6 +272,7 @@ prompt     = "."
 model      = "haiku"      # 最便宜的档位;触发并不需要 SOTA 模型
 extra_args = []           # 额外 Claude CLI 参数;print/headless-only 参数会被忽略
 align_start = ""          # 可选 RFC3339:首个窗口的相位锚点;留空 = 尽快开始
+continue_prompt = "continue"  # continue 在 5h 恢复时注入的消息;留空 = "continue"
 
 [codex]
 enabled          = true
@@ -275,6 +281,7 @@ model            = "gpt-5.4-mini"  # 用于触发的最便宜 Codex 模型
 reasoning_effort = "low"  # 启用 web_search/image_gen 工具时,"minimal" 会被拒绝
 extra_args       = []     # 额外 Codex CLI 参数;--json 等 exec-only 参数会被忽略
 align_start      = ""
+continue_prompt  = "continue"  # continue 在 5h 恢复时注入的消息;留空 = "continue"
 
 [spark]
 enabled          = false  # 需显式启用;Spark 是独立的 Codex-backed watch 目标
@@ -372,6 +379,27 @@ limitping bg stop           # 停止
 launchctl load ~/Library/LaunchAgents/com.limitping.watch.plist
 ```
 
+## 自动续跑挂起的任务
+
+`watch` 和 `bg` 能让窗口链保持接龙,但它们不会去恢复一个已经停在 5h 限额处的任务。
+`limitping continue <provider>` 可以:它通过 PTY 启动 Provider 真正的交互式 CLI,把你的
+终端原样透传,你照常使用 Codex / Claude Code。它在后台监测用量,当 5h 限额(曾打满)
+恢复的瞬间,把续跑消息输入到会话里,让长任务自己接着跑,而不是一直停在限额处等你回来。
+
+```sh
+limitping continue codex                       # 照常使用 Codex;恢复时自动续跑
+limitping continue codex --yolo                # Provider 后面的参数原样透传给 CLI
+limitping continue claude --dangerously-skip-permissions
+```
+
+- 续跑消息取配置中各 Provider 的 `continue_prompt`(默认 `"continue"`,可改成如
+  `"继续任务"`)。退出请用该 CLI 自带的退出方式。
+- 只在真正的恢复边沿注入:5h 窗口曾打满(或端点报告 `limit_reached`,或 CLI 打印过
+  限额消息)且随后明确重置,同时周窗口也未耗尽(按 `weekly_threshold`,含 credits)——
+  因此不会一恢复就直接撞上周墙。
+- 诊断时间线写入 `~/.config/limitping/continue.log`。
+- 目前仅支持 Unix(需要 PTY);在 Windows 上该命令会提示暂不支持。
+
 ## 成本与注意事项
 
 - 本地数据处理和网络行为见 [PRIVACY.md](PRIVACY.md)。
@@ -394,7 +422,7 @@ internal/activity        基于钩子的活跃会话状态(hook 命令与 schedu
 internal/pricing         为能暴露 token 用量的 Provider 准备的价格辅助代码
 internal/scheduler       watch 引擎(sleep 到重置、尊重周限额、退避重试)
 internal/notify          macOS osascript 通知
-internal/cli             cobra 命令:status、ping、watch、background、config、hooks、upgrade、uninstall、version
+internal/cli             cobra 命令:status、ping、watch、continue、background、config、hooks、upgrade、uninstall、version
 ```
 
 ## 贡献

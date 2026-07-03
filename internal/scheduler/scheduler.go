@@ -257,10 +257,7 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 }
 
 func (s *Scheduler) weeklyExhausted(u *usage.Usage) bool {
-	if u.CreditsUsable() {
-		return false
-	}
-	return u.Weekly.UsedPercent/100 >= s.cfg.WeeklyThreshold
+	return u.WeeklyExhausted(s.cfg.WeeklyThreshold)
 }
 
 func activeProviderTask(ctx context.Context, p provider.Provider) (string, bool, error) {

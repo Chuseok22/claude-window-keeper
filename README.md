@@ -42,6 +42,9 @@ spark   ✓ pinged (12.4s)
   existing logged-in credentials.
 - Detects active Claude/Codex turns via CLI hooks; Spark uses the Codex hook
   signal because it runs through the Codex CLI.
+- Auto-resumes parked tasks: `limitping continue <provider>` proxies the
+  official CLI and types your continue message the moment the 5h limit
+  recovers, so an overnight task doesn't sit at the limit until morning.
 - Includes dry-run modes, weekly-limit guards, reset buffers, cheap-model
   defaults, macOS notifications, local config, and no telemetry.
 
@@ -178,6 +181,9 @@ limitping watch                # foreground daemon: ping each window at reset (a
 limitping watch claude         # watch only one provider (claude|codex|spark)
 limitping watch --live         # optional live heartbeat/status line
 limitping watch --dry-run      # log when pings would fire, without sending
+limitping continue codex       # proxy the CLI; auto-resume the task on 5h recovery
+limitping continue codex --yolo             # flags after the provider pass through
+limitping continue claude --dangerously-skip-permissions
 limitping bg start             # run watch in the background, freeing the terminal
 limitping bg status            # running? + each watched provider's usage (alias: limitping bg)
 limitping bg logs -f           # follow the background watcher's log
@@ -285,6 +291,7 @@ prompt     = "."
 model      = "haiku"      # cheapest tier; triggering doesn't need a SOTA model
 extra_args = []           # extra Claude CLI args; print/headless-only flags are ignored
 align_start = ""          # optional RFC3339 anchor for the first window; empty = start ASAP
+continue_prompt = "continue"  # message `continue` injects on 5h recovery; empty = "continue"
 
 [codex]
 enabled          = true
@@ -293,6 +300,7 @@ model            = "gpt-5.4-mini"  # cheapest Codex model for triggering
 reasoning_effort = "low"  # "minimal" is rejected when web_search/image_gen tools are enabled
 extra_args       = []     # extra Codex CLI args; exec-only flags such as --json are ignored
 align_start      = ""
+continue_prompt  = "continue"  # message `continue` injects on 5h recovery; empty = "continue"
 
 [spark]
 enabled          = false  # opt in; Spark is a separate Codex-backed watch target
@@ -404,6 +412,33 @@ For **start-at-login** on macOS, use a `launchd` agent instead. Create
 launchctl load ~/Library/LaunchAgents/com.limitping.watch.plist
 ```
 
+## Auto-continue a parked task
+
+`watch` and `bg` keep your window chain warm, but they don't resume a task that
+has already stalled at the 5h limit. `limitping continue <provider>` does: it
+launches the provider's real interactive CLI through a PTY and passes your
+terminal straight through, so you drive Codex / Claude Code exactly as usual.
+In the background it polls usage and, the moment the 5h limit recovers after
+being hit, types your continue message into the session so a long task resumes
+itself instead of sitting parked until you come back.
+
+```sh
+limitping continue codex                       # drive Codex as usual; auto-resume on recovery
+limitping continue codex --yolo                # flags after the provider pass through verbatim
+limitping continue claude --dangerously-skip-permissions
+```
+
+- The resume message is each provider's `continue_prompt` in config (default
+  `"continue"`; set it to e.g. `"继续任务"`). Quit from inside the CLI to exit.
+- It only injects on a genuine recovery edge: the 5h window was maxed (or the
+  endpoint reported `limit_reached`, or the CLI printed a limit message) and has
+  since clearly reset, and the weekly window isn't also exhausted (per
+  `weekly_threshold`, credits included) — so it won't resume straight into the
+  weekly wall.
+- A diagnostic timeline is written to `~/.config/limitping/continue.log`.
+- Unix only for now (needs a PTY); on Windows the command reports that it's
+  unsupported.
+
 ## Cost & caveats
 
 - See [PRIVACY.md](PRIVACY.md) for local data handling and network behavior.
@@ -429,7 +464,7 @@ internal/activity        hook-based active-session state (shared by the hook cmd
 internal/pricing         pricing helpers for providers that expose token usage
 internal/scheduler       the watch engine (sleep-until-reset, weekly-respect, backoff)
 internal/notify          macOS osascript notifications
-internal/cli             cobra commands: status, ping, watch, background, config, hooks, upgrade, uninstall, version
+internal/cli             cobra commands: status, ping, watch, continue, background, config, hooks, upgrade, uninstall, version
 ```
 
 ## Contributing
