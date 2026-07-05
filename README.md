@@ -181,6 +181,8 @@ limitping watch                # foreground daemon: ping each window at reset (a
 limitping watch claude         # watch only one provider (claude|codex|spark)
 limitping watch --live         # optional live heartbeat/status line
 limitping watch --dry-run      # log when pings would fire, without sending
+limitping schedule codex --at 05:00 --at 13:00  # ping at daily local times
+limitping schedule --every 5h  # ping on a fixed interval instead of reset time
 limitping continue codex       # proxy the CLI; auto-resume the task on 5h recovery
 limitping continue codex --yolo             # flags after the provider pass through
 limitping continue claude --dangerously-skip-permissions
@@ -207,6 +209,7 @@ Short aliases are also available for config commands: `limitping c i` for
 | `status` | `s`, `stat` |
 | `ping` | `p` |
 | `watch` | `w` |
+| `schedule` | `sched` |
 | `background` | `bg` |
 | `config` | `c`, `cfg` |
 | `config init` | `c i` |
@@ -236,13 +239,18 @@ Example `status`:
 
 ```
 claude
-  5h     [█████░░░░░]  51.0%  resets in 3h14m    (Sun 00:10)
-  weekly [█████░░░░░]  54.0%  resets in 7h04m    (Sun 04:00)
+  5h     [█████░░░░░]  51.0% used      resets in 3h14m    (Sun 00:10)
+  weekly [█████░░░░░]  54.0% used      resets in 7h04m    (Sun 04:00)
 
 codex (plus)
-  5h     [██░░░░░░░░]  24.0%  resets in 3h15m    (Sun 00:11)
-  weekly [████░░░░░░]  37.0%  resets in 111h57m  (Thu 12:53)
+  5h     [██░░░░░░░░]  24.0% used      resets in 3h15m    (Sun 00:11)
+  weekly [████░░░░░░]  37.0% used      resets in 111h57m  (Thu 12:53)
+  reset credits 1 reset available
+    - available, granted Jun 17 17:38, expires Jul 17 17:38
 ```
+
+Text status defaults to **used** percentage. Set `usage_display = "remaining"` if
+you prefer the same mental model as Codex's "Usage remaining" UI.
 
 `status --json` returns the same data as a JSON array (one object per provider),
 for scripts and dashboards. Progress chatter is suppressed so stdout stays a
@@ -257,6 +265,7 @@ to embed each provider's raw response under `raw`.
     "plan": "plus",
     "five_hour": {
       "used_percent": 24,
+      "remaining_percent": 76,
       "active": true,
       "resets_at": "2026-06-17T05:51:45+08:00",
       "remaining_seconds": 11700,
@@ -264,12 +273,23 @@ to embed each provider's raw response under `raw`.
     },
     "weekly": {
       "used_percent": 37,
+      "remaining_percent": 63,
       "active": true,
       "resets_at": "2026-06-24T00:51:45+08:00",
       "remaining_seconds": 403020,
       "window_seconds": 604800
     },
     "credits": { "has_credits": false, "unlimited": false, "balance": "0" },
+    "reset_credits": {
+      "available_count": 1,
+      "credits": [
+        {
+          "status": "available",
+          "granted_at": "2026-06-17T17:38:38Z",
+          "expires_at": "2026-07-17T17:38:38Z"
+        }
+      ]
+    },
     "limit_reached": false,
     "fetched_at": "2026-06-17T01:00:43+08:00"
   }
@@ -284,6 +304,7 @@ to embed each provider's raw response under `raw`.
 weekly_threshold = 0.99   # skip pinging when weekly usage >= this (0..1), until weekly reset
 reset_buffer     = "10s"  # wait this long after a reset before pinging (ensures rollover)
 notify           = true   # macOS notifications on ping/skip/failure
+usage_display    = "used" # text status: "used" or "remaining"
 
 [claude]
 enabled    = true
@@ -317,6 +338,8 @@ Top-level keys:
   pinging and waits for the weekly reset (unless usable credits exist).
 - **`reset_buffer`** — how long to wait after a window's reset time before
   pinging, so the window has definitely rolled over.
+- **`usage_display`** — whether text `status` / `bg status` renders each window
+  as used percentage or remaining percentage.
 - **`align_start`** (per provider) — pin the phase of your windows: set to a
   future RFC3339 time to delay the very first ping until then; afterwards windows
   chain automatically every ~5h.
@@ -365,6 +388,22 @@ Codex hook/activity marker; there is no separate Spark hook config.
 > gates custom command hooks behind a one-time trust step: run `/hooks` inside
 > Codex once to enable them. Remove everything later with
 > `limitping hooks uninstall` (also done automatically by `limitping uninstall`).
+
+## Scheduled pings
+
+Use `schedule` when you want **wall-clock pings** instead of reset-aligned
+window chaining. It keeps running in the foreground and fires `ping` at the next
+configured interval or daily local time:
+
+```sh
+limitping schedule codex --at 05:00
+limitping schedule codex --at 05:00 --at 13:00 --at 21:00
+limitping schedule --at 05:00,13:00,21:00
+limitping schedule spark --every 5h --dry-run
+```
+
+You can combine `--every` and `--at`; whichever next occurrence comes first is
+used. `--at` values are daily local times in `HH:MM` or `HH:MM:SS` form.
 
 ## Run `watch` in the background
 
@@ -464,7 +503,7 @@ internal/activity        hook-based active-session state (shared by the hook cmd
 internal/pricing         pricing helpers for providers that expose token usage
 internal/scheduler       the watch engine (sleep-until-reset, weekly-respect, backoff)
 internal/notify          macOS osascript notifications
-internal/cli             cobra commands: status, ping, watch, continue, background, config, hooks, upgrade, uninstall, version
+internal/cli             cobra commands: status, ping, watch, schedule, continue, background, config, hooks, upgrade, uninstall, version
 ```
 
 ## Contributing

@@ -26,6 +26,7 @@ import (
 const (
 	codexDefaultBaseURL = "https://chatgpt.com/backend-api"
 	codexChatGPTPath    = "/wham/usage"
+	codexResetPath      = "/wham/rate-limit-reset-credits"
 	codexAPIPath        = "/api/codex/usage"
 	codexUserAgent      = "limitping"
 	sparkDefaultModel   = "gpt-5.3-codex-spark"
@@ -63,7 +64,11 @@ func (c *Codex) ReadUsage(ctx context.Context) (*usage.Usage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return codexUsageToUsage(c.Name(), body, r, r.RateLimit), nil
+	u := codexUsageToUsage(c.Name(), body, r, r.RateLimit)
+	if credits, err := readCodexResetCredits(ctx, c.auth); err == nil {
+		u.ResetCredits = credits
+	}
+	return u, nil
 }
 
 func (c *Codex) Trigger(ctx context.Context, dryRun bool) (*TriggerResult, error) {
@@ -154,6 +159,18 @@ type codexUsageResp struct {
 	Credits              *codexCredits              `json:"credits"`
 }
 
+type codexResetCreditsResp struct {
+	AvailableCount *int               `json:"available_count"`
+	Credits        []codexResetCredit `json:"credits"`
+}
+
+type codexResetCredit struct {
+	Status     string `json:"status"`
+	GrantedAt  string `json:"granted_at"`
+	ExpiresAt  string `json:"expires_at"`
+	RedeemedAt string `json:"redeemed_at"`
+}
+
 func readCodexUsage(ctx context.Context, auth *auth.CodexAuth) ([]byte, codexUsageResp, error) {
 	var r codexUsageResp
 	accountID, _ := auth.AccountID(ctx)
@@ -180,6 +197,33 @@ func readCodexUsage(ctx context.Context, auth *auth.CodexAuth) ([]byte, codexUsa
 	return body, r, nil
 }
 
+func readCodexResetCredits(ctx context.Context, auth *auth.CodexAuth) (*usage.ResetCredits, error) {
+	var r codexResetCreditsResp
+	accountID, _ := auth.AccountID(ctx)
+	body, err := fetchWithAuth(ctx, auth, func(token string) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, codexResetCreditsURL(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", codexUserAgent)
+		req.Header.Set("OpenAI-Beta", "codex-1")
+		req.Header.Set("originator", "Codex Desktop")
+		if accountID != "" {
+			req.Header.Set("ChatGPT-Account-Id", accountID)
+		}
+		return req, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return nil, fmt.Errorf("codex reset credits: parsing response: %w", err)
+	}
+	return codexResetCreditsToUsage(r), nil
+}
+
 func codexUsageToUsage(provider string, body []byte, r codexUsageResp, rateLimit codexRateLimit) *usage.Usage {
 	u := &usage.Usage{
 		Provider:     provider,
@@ -198,6 +242,37 @@ func codexUsageToUsage(provider string, body []byte, r codexUsageResp, rateLimit
 		}
 	}
 	return u
+}
+
+func codexResetCreditsToUsage(r codexResetCreditsResp) *usage.ResetCredits {
+	credits := make([]usage.ResetCredit, 0, len(r.Credits))
+	for _, c := range r.Credits {
+		credits = append(credits, usage.ResetCredit{
+			Status:     c.Status,
+			GrantedAt:  parseCodexResetTime(c.GrantedAt),
+			ExpiresAt:  parseCodexResetTime(c.ExpiresAt),
+			RedeemedAt: parseCodexResetTime(c.RedeemedAt),
+		})
+	}
+	count := len(credits)
+	if r.AvailableCount != nil {
+		count = *r.AvailableCount
+	}
+	return &usage.ResetCredits{
+		AvailableCount: count,
+		Credits:        credits,
+	}
+}
+
+func parseCodexResetTime(raw string) time.Time {
+	if raw == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 func sparkRateLimitFromResponse(r codexUsageResp, model string) (codexRateLimit, error) {
@@ -230,6 +305,16 @@ func codexUsageURL() string {
 	return codexUsageURLFromBase(base)
 }
 
+func codexResetCreditsURL() string {
+	base := codexDefaultBaseURL
+	if contents, err := os.ReadFile(codexConfigPath()); err == nil {
+		if configured := parseCodexBaseURL(string(contents)); configured != "" {
+			base = configured
+		}
+	}
+	return codexResetCreditsURLFromBase(base)
+}
+
 func codexUsageURLFromBase(base string) string {
 	normalized := normalizeCodexBaseURL(base)
 	path := codexAPIPath
@@ -239,6 +324,18 @@ func codexUsageURLFromBase(base string) string {
 	endpoint := normalized + path
 	if _, err := url.ParseRequestURI(endpoint); err != nil {
 		return codexDefaultBaseURL + codexChatGPTPath
+	}
+	return endpoint
+}
+
+func codexResetCreditsURLFromBase(base string) string {
+	normalized := normalizeCodexBaseURL(base)
+	if !strings.Contains(normalized, "/backend-api") {
+		normalized = codexDefaultBaseURL
+	}
+	endpoint := normalized + codexResetPath
+	if _, err := url.ParseRequestURI(endpoint); err != nil {
+		return codexDefaultBaseURL + codexResetPath
 	}
 	return endpoint
 }

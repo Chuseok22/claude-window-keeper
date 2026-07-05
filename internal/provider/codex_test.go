@@ -25,9 +25,6 @@ func TestCodexReadUsageSendsCompatibleHeaders(t *testing.T) {
 	}
 
 	usageHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if got := req.URL.String(); got != "https://chatgpt.com/backend-api/wham/usage" {
-			t.Fatalf("url = %q", got)
-		}
 		if got := req.Header.Get("Authorization"); got != "Bearer access-token" {
 			t.Fatalf("authorization = %q", got)
 		}
@@ -40,14 +37,37 @@ func TestCodexReadUsageSendsCompatibleHeaders(t *testing.T) {
 		if got := req.Header.Get("ChatGPT-Account-Id"); got != "account-123" {
 			t.Fatalf("account id = %q", got)
 		}
-		body := `{
-			"plan_type": "pro",
-			"rate_limit": {
-				"limit_reached": false,
-				"primary_window": {"used_percent": 12, "limit_window_seconds": 18000, "reset_at": 4102444800},
-				"secondary_window": {"used_percent": 34, "limit_window_seconds": 604800, "reset_at": 4103049600}
+		var body string
+		switch req.URL.String() {
+		case "https://chatgpt.com/backend-api/wham/usage":
+			body = `{
+				"plan_type": "pro",
+				"rate_limit": {
+					"limit_reached": false,
+					"primary_window": {"used_percent": 12, "limit_window_seconds": 18000, "reset_at": 4102444800},
+					"secondary_window": {"used_percent": 34, "limit_window_seconds": 604800, "reset_at": 4103049600}
+				}
+			}`
+		case "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits":
+			if got := req.Header.Get("OpenAI-Beta"); got != "codex-1" {
+				t.Fatalf("OpenAI-Beta = %q", got)
 			}
-		}`
+			if got := req.Header.Get("originator"); got != "Codex Desktop" {
+				t.Fatalf("originator = %q", got)
+			}
+			body = `{
+				"available_count": 1,
+				"credits": [
+					{
+						"status": "available",
+						"granted_at": "2026-06-17T17:38:38Z",
+						"expires_at": "2026-07-17T17:38:38Z"
+					}
+				]
+			}`
+		default:
+			t.Fatalf("url = %q", req.URL.String())
+		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(strings.NewReader(body)),
@@ -64,6 +84,12 @@ func TestCodexReadUsageSendsCompatibleHeaders(t *testing.T) {
 	}
 	if u.FiveHour.UsedPercent != 12 || u.Weekly.UsedPercent != 34 {
 		t.Fatalf("windows = %#v %#v", u.FiveHour, u.Weekly)
+	}
+	if u.ResetCredits == nil || u.ResetCredits.AvailableCount != 1 || len(u.ResetCredits.Credits) != 1 {
+		t.Fatalf("reset credits = %#v, want one available credit", u.ResetCredits)
+	}
+	if got := u.ResetCredits.Credits[0].ExpiresAt.Year(); got != 2026 {
+		t.Fatalf("reset credit expiry year = %d, want 2026", got)
 	}
 }
 
@@ -150,6 +176,49 @@ func TestSparkReadUsageRequiresSparkLimit(t *testing.T) {
 	}
 }
 
+func TestCodexReadUsageIgnoresResetCreditFailure(t *testing.T) {
+	oldClient := usageHTTPClient
+	defer func() { usageHTTPClient = oldClient }()
+
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	authJSON := `{"tokens":{"access_token":"access-token","refresh_token":"refresh-token","account_id":"account-123"}}`
+	if err := os.WriteFile(filepath.Join(home, "auth.json"), []byte(authJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	usageHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.String() == "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits" {
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(strings.NewReader(`{"error":"not found"}`)),
+				Request:    req,
+			}, nil
+		}
+		body := `{
+			"plan_type": "pro",
+			"rate_limit": {
+				"limit_reached": false,
+				"primary_window": {"used_percent": 12, "limit_window_seconds": 18000, "reset_at": 4102444800},
+				"secondary_window": {"used_percent": 34, "limit_window_seconds": 604800, "reset_at": 4103049600}
+			}
+		}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Request:    req,
+		}, nil
+	})}
+
+	u, err := NewCodex(config.ProviderConfig{}).ReadUsage(context.Background())
+	if err != nil {
+		t.Fatalf("ReadUsage: %v", err)
+	}
+	if u.ResetCredits != nil {
+		t.Fatalf("reset credits = %#v, want nil after reset endpoint failure", u.ResetCredits)
+	}
+}
+
 func TestCodexUsageURLFromBase(t *testing.T) {
 	cases := map[string]string{
 		"":                                 "https://chatgpt.com/backend-api/wham/usage",
@@ -162,6 +231,21 @@ func TestCodexUsageURLFromBase(t *testing.T) {
 	for base, want := range cases {
 		if got := codexUsageURLFromBase(base); got != want {
 			t.Fatalf("codexUsageURLFromBase(%q) = %q, want %q", base, got, want)
+		}
+	}
+}
+
+func TestCodexResetCreditsURLFromBase(t *testing.T) {
+	cases := map[string]string{
+		"":                                 "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+		"https://chatgpt.com/backend-api/": "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+		"https://chat.openai.com":          "https://chat.openai.com/backend-api/wham/rate-limit-reset-credits",
+		"https://api.openai.com":           "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+		"://bad":                           "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+	}
+	for base, want := range cases {
+		if got := codexResetCreditsURLFromBase(base); got != want {
+			t.Fatalf("codexResetCreditsURLFromBase(%q) = %q, want %q", base, got, want)
 		}
 	}
 }

@@ -53,6 +53,9 @@ type Config struct {
 	ResetBuffer Duration `toml:"reset_buffer"`
 	// Notify: emit macOS notifications on ping success/failure/skip.
 	Notify bool `toml:"notify"`
+	// UsageDisplay controls the text status percentage: "used" preserves the raw
+	// provider usage value; "remaining" shows the complement users see in some UIs.
+	UsageDisplay string `toml:"usage_display"`
 
 	Claude ProviderConfig `toml:"claude"`
 	Codex  ProviderConfig `toml:"codex"`
@@ -65,6 +68,7 @@ func Default() Config {
 		WeeklyThreshold: 0.99,
 		ResetBuffer:     Duration{10 * time.Second},
 		Notify:          true,
+		UsageDisplay:    "used",
 		Claude: ProviderConfig{
 			Enabled:        true,
 			Prompt:         ".",
@@ -139,6 +143,9 @@ func (c Config) validate() error {
 	if c.ResetBuffer.Duration < 0 {
 		return errors.New("reset_buffer must not be negative")
 	}
+	if c.UsageDisplay != "" && c.UsageDisplay != "used" && c.UsageDisplay != "remaining" {
+		return fmt.Errorf("usage_display must be \"used\" or \"remaining\", got %q", c.UsageDisplay)
+	}
 	return nil
 }
 
@@ -175,6 +182,9 @@ reset_buffer = "10s"
 
 # Emit macOS notifications on ping success/failure/skip.
 notify = true
+
+# Text status percentage: "used" or "remaining".
+usage_display = "used"
 
 [claude]
 enabled = true

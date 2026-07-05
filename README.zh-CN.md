@@ -166,6 +166,8 @@ limitping watch                # 前台守护:在每个窗口重置时自动 pin
 limitping watch claude         # 只监测某一个 Provider(claude|codex|spark)
 limitping watch --live         # 可选:显示实时心电图状态行
 limitping watch --dry-run      # 只记录何时会触发,不真正发送
+limitping schedule codex --at 05:00 --at 13:00  # 按每日指定时间 ping
+limitping schedule --every 5h  # 按固定间隔 ping,不跟随重置时间
 limitping continue codex       # 代理 CLI;5h 限额恢复时自动续跑任务
 limitping continue codex --yolo             # Provider 后面的参数原样透传
 limitping continue claude --dangerously-skip-permissions
@@ -192,6 +194,7 @@ limitping uninstall            # 删除 limitping 以及配置/缓存(简称: rm
 | `status` | `s`、`stat` |
 | `ping` | `p` |
 | `watch` | `w` |
+| `schedule` | `sched` |
 | `background` | `bg` |
 | `config` | `c`、`cfg` |
 | `config init` | `c i` |
@@ -218,13 +221,18 @@ ping 后请用 `status` 或 `bg status` 查看权威的 5h/周窗口状态。
 
 ```
 claude
-  5h     [█████░░░░░]  51.0%  resets in 3h14m    (Sun 00:10)
-  weekly [█████░░░░░]  54.0%  resets in 7h04m    (Sun 04:00)
+  5h     [█████░░░░░]  51.0% used      resets in 3h14m    (Sun 00:10)
+  weekly [█████░░░░░]  54.0% used      resets in 7h04m    (Sun 04:00)
 
 codex (plus)
-  5h     [██░░░░░░░░]  24.0%  resets in 3h15m    (Sun 00:11)
-  weekly [████░░░░░░]  37.0%  resets in 111h57m  (Thu 12:53)
+  5h     [██░░░░░░░░]  24.0% used      resets in 3h15m    (Sun 00:11)
+  weekly [████░░░░░░]  37.0% used      resets in 111h57m  (Thu 12:53)
+  reset credits 1 reset available
+    - available, granted Jun 17 17:38, expires Jul 17 17:38
 ```
+
+文本状态默认显示 **used** 百分比。若想和 Codex 界面里的“剩余用量”保持同一口径,
+可以设置 `usage_display = "remaining"`。
 
 `status --json` 以 JSON 数组返回相同数据(每个 Provider 一个对象),便于脚本和
 看板消费。进度提示会被抑制,以保证 stdout 是单个合法 JSON;读取失败的 Provider
@@ -238,6 +246,7 @@ codex (plus)
     "plan": "plus",
     "five_hour": {
       "used_percent": 24,
+      "remaining_percent": 76,
       "active": true,
       "resets_at": "2026-06-17T05:51:45+08:00",
       "remaining_seconds": 11700,
@@ -245,12 +254,23 @@ codex (plus)
     },
     "weekly": {
       "used_percent": 37,
+      "remaining_percent": 63,
       "active": true,
       "resets_at": "2026-06-24T00:51:45+08:00",
       "remaining_seconds": 403020,
       "window_seconds": 604800
     },
     "credits": { "has_credits": false, "unlimited": false, "balance": "0" },
+    "reset_credits": {
+      "available_count": 1,
+      "credits": [
+        {
+          "status": "available",
+          "granted_at": "2026-06-17T17:38:38Z",
+          "expires_at": "2026-07-17T17:38:38Z"
+        }
+      ]
+    },
     "limit_reached": false,
     "fetched_at": "2026-06-17T01:00:43+08:00"
   }
@@ -265,6 +285,7 @@ codex (plus)
 weekly_threshold = 0.99   # 周用量 >= 此值(0..1)就跳过 ping,直到周窗口重置
 reset_buffer     = "10s"  # 到达重置时刻后再等这么久才 ping(确保窗口已翻篇)
 notify           = true   # 在 ping/跳过/失败 时弹 macOS 通知
+usage_display    = "used" # 文本状态显示 "used" 或 "remaining"
 
 [claude]
 enabled    = true
@@ -297,6 +318,7 @@ align_start      = ""
 - **`weekly_threshold`** —— 周窗口到/超过此值时,`watch` 停止 ping 并等到周重置
   (除非还有可用 credits)。
 - **`reset_buffer`** —— 在窗口重置时刻之后再等待多久才 ping,确保窗口确实已翻篇。
+- **`usage_display`** —— 文本 `status` / `bg status` 使用已用百分比还是剩余百分比。
 - **`align_start`**(每个 Provider)—— 固定窗口相位:设为一个未来的 RFC3339 时间,
   把第一次 ping 推迟到那时;之后窗口每 ~5h 自动接龙。
 
@@ -336,6 +358,22 @@ Codex 钩子/活跃状态标记,没有单独的 Spark 钩子配置。
 > Claude Code 会自动加载钩子,无需操作。**Codex** 对自定义命令钩子要求一次性信任:
 > 在 Codex 中运行一次 `/hooks` 启用即可。之后用 `limitping hooks uninstall` 全部移除
 > (`limitping uninstall` 也会自动清理)。
+
+## 定时 ping
+
+需要按**墙钟时间**执行时,用 `schedule`;需要跟随限额窗口重置接龙时,继续用
+`watch`。`schedule` 会以前台常驻方式运行,在下一个固定间隔或每日指定时间点触发
+`ping`:
+
+```sh
+limitping schedule codex --at 05:00
+limitping schedule codex --at 05:00 --at 13:00 --at 21:00
+limitping schedule --at 05:00,13:00,21:00
+limitping schedule spark --every 5h --dry-run
+```
+
+`--every` 和 `--at` 可以一起使用;谁先到就先执行。`--at` 是本地每日时间,格式为
+`HH:MM` 或 `HH:MM:SS`。
 
 ## 后台运行 `watch`
 
@@ -422,7 +460,7 @@ internal/activity        基于钩子的活跃会话状态(hook 命令与 schedu
 internal/pricing         为能暴露 token 用量的 Provider 准备的价格辅助代码
 internal/scheduler       watch 引擎(sleep 到重置、尊重周限额、退避重试)
 internal/notify          macOS osascript 通知
-internal/cli             cobra 命令:status、ping、watch、continue、background、config、hooks、upgrade、uninstall、version
+internal/cli             cobra 命令:status、ping、watch、schedule、continue、background、config、hooks、upgrade、uninstall、version
 ```
 
 ## 贡献

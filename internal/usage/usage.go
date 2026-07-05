@@ -40,6 +40,20 @@ type Credits struct {
 	Balance    string
 }
 
+// ResetCredit is a banked Codex rate-limit reset credit.
+type ResetCredit struct {
+	Status     string
+	GrantedAt  time.Time
+	ExpiresAt  time.Time
+	RedeemedAt time.Time
+}
+
+// ResetCredits summarizes account-backed Codex reset credits.
+type ResetCredits struct {
+	AvailableCount int
+	Credits        []ResetCredit
+}
+
 // Usage is a provider's full rate-limit snapshot at FetchedAt.
 type Usage struct {
 	Provider     string
@@ -47,6 +61,7 @@ type Usage struct {
 	Weekly       Window
 	Plan         string
 	Credits      *Credits
+	ResetCredits *ResetCredits
 	LimitReached bool
 	FetchedAt    time.Time
 	Raw          []byte // raw JSON body, for `status -v`

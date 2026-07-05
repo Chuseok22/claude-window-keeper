@@ -27,7 +27,7 @@ func TestRunStatusPrintsProgressBeforeReadUsage(t *testing.T) {
 		},
 	}
 
-	if err := runStatus(context.Background(), &out, &progress, enText, []provider.Provider{p}, false, false); err != nil {
+	if err := runStatus(context.Background(), &out, &progress, enText, []provider.Provider{p}, false, false, "used"); err != nil {
 		t.Fatalf("runStatus() error = %v", err)
 	}
 	if !strings.Contains(out.String(), "codex\n") {
@@ -52,7 +52,7 @@ func TestRunStatusJSON(t *testing.T) {
 		fakeStatusProvider{name: "claude", err: errors.New("boom")},
 	}
 
-	err := runStatus(context.Background(), &out, &progress, enText, providers, false, true)
+	err := runStatus(context.Background(), &out, &progress, enText, providers, false, true, "used")
 	if err == nil {
 		t.Fatalf("runStatus() error = nil, want failure for the erroring provider")
 	}
@@ -73,11 +73,54 @@ func TestRunStatusJSON(t *testing.T) {
 	if got[0].FiveHour == nil || got[0].FiveHour.UsedPercent != 42.5 || !got[0].FiveHour.Active {
 		t.Fatalf("entry[0].five_hour = %+v, want 42.5%% active", got[0].FiveHour)
 	}
+	if got[0].FiveHour.RemainingPercent != 57.5 {
+		t.Fatalf("entry[0].five_hour.remaining_percent = %v, want 57.5", got[0].FiveHour.RemainingPercent)
+	}
 	if got[0].FiveHour.RemainingSeconds <= 0 {
 		t.Fatalf("entry[0].five_hour.remaining_seconds = %d, want > 0", got[0].FiveHour.RemainingSeconds)
 	}
 	if got[1].Provider != "claude" || got[1].Error == "" {
 		t.Fatalf("entry[1] = %+v, want claude with error", got[1])
+	}
+}
+
+func TestPrintUsageCanShowRemainingPercent(t *testing.T) {
+	var out bytes.Buffer
+	u := &usage.Usage{
+		Provider: "codex",
+		FiveHour: usage.Window{UsedPercent: 1},
+		Weekly:   usage.Window{UsedPercent: 15},
+	}
+
+	printUsage(&out, u, false, "remaining")
+
+	got := out.String()
+	if !strings.Contains(got, "99.0% remaining") || !strings.Contains(got, "85.0% remaining") {
+		t.Fatalf("status output = %q, want remaining percentages", got)
+	}
+}
+
+func TestPrintUsageIncludesResetCredits(t *testing.T) {
+	var out bytes.Buffer
+	u := &usage.Usage{
+		Provider: "codex",
+		ResetCredits: &usage.ResetCredits{
+			AvailableCount: 1,
+			Credits: []usage.ResetCredit{
+				{
+					Status:    "available",
+					GrantedAt: time.Date(2026, 6, 17, 17, 38, 0, 0, time.UTC),
+					ExpiresAt: time.Date(2026, 7, 17, 17, 38, 0, 0, time.UTC),
+				},
+			},
+		},
+	}
+
+	printUsage(&out, u, false, "used")
+
+	got := out.String()
+	if !strings.Contains(got, "reset credits 1 reset available") || !strings.Contains(got, "available") {
+		t.Fatalf("status output = %q, want reset credit summary", got)
 	}
 }
 
