@@ -5,6 +5,20 @@ All notable changes to this project should be documented here.
 This project uses version tags such as `v0.2.0`. Release binaries are published
 through GitHub Actions and GoReleaser.
 
+## v0.7.0
+
+- Added `limitping schedule [provider]`, a foreground scheduler that runs pings
+  on fixed intervals (`--every 5h`) or at one or more daily local times
+  (`--at 05:00 --at 13:00`, or comma-separated values). It reuses the existing
+  ping path and supports `--dry-run`.
+- Added best-effort Codex reset credit reads from the Codex backend reset-credit
+  endpoint. When available, `status` and `status --json` now report available
+  reset credits without failing the usage read if that private endpoint is
+  unavailable.
+- Added `usage_display = "used" | "remaining"` for text `status` / `bg status`,
+  and added `remaining_percent` to JSON window output so scripts can consume
+  both views.
+
 ## v0.6.0
 
 - Added `limitping continue <provider>`, an interactive proxy that launches the
