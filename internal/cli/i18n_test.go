@@ -36,6 +36,7 @@ func TestRootCommandAliases(t *testing.T) {
 	root := newRootCmd()
 	cases := map[string]string{
 		"p":      "ping",
+		"sched":  "schedule",
 		"s":      "status",
 		"w":      "watch",
 		"c":      "config",

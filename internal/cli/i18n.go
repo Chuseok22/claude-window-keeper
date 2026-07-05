@@ -39,6 +39,15 @@ type cliText struct {
 	watchLiveFlag          string
 	watchAlreadyRunningFmt string
 
+	scheduleShort      string
+	scheduleLong       string
+	scheduleEveryFlag  string
+	scheduleAtFlag     string
+	scheduleStartedFmt string
+	scheduleNextFmt    string
+	scheduleRunFmt     string
+	scheduleErrorFmt   string
+
 	// `continue` interactive proxy strings.
 	continueShort       string
 	continueLong        string
@@ -209,6 +218,24 @@ Examples:
 	watchDryRunFlag:        "log when pings would fire without sending them",
 	watchLiveFlag:          "show a live heartbeat/status line while watching (uses more power)",
 	watchAlreadyRunningFmt: "watch already running (pid %d, provider %s%s, started %s); stop it before starting another watcher",
+
+	scheduleShort: "Run scheduled pings at fixed intervals or daily times",
+	scheduleLong: `Run scheduled pings for the selected provider. Unlike watch, this follows your wall-clock schedule instead of waiting for the provider's reset time.
+
+Arguments:
+  provider  Optional. One of: claude, codex, spark, all.
+            Defaults to all, which pings every enabled provider.
+
+Examples:
+  limitping schedule codex --at 05:00
+  limitping schedule --at 05:00 --at 13:00 --at 21:00
+  limitping schedule spark --every 5h --dry-run`,
+	scheduleEveryFlag:  "run repeatedly after this interval (for example 5h, 90m)",
+	scheduleAtFlag:     "run at a daily local time HH:MM; repeat the flag or use commas for multiple times",
+	scheduleStartedFmt: "Scheduled ping for %s (%s%s).\n",
+	scheduleNextFmt:    "Next scheduled ping at %s (in %s).\n",
+	scheduleRunFmt:     "===== scheduled ping: %s =====\n",
+	scheduleErrorFmt:   "schedule run completed with error: %v\n",
 
 	continueShort: "Proxy a provider's CLI and auto-continue its task when the 5h limit recovers",
 	continueLong: `Launch a provider's interactive CLI through limitping. Your terminal is passed straight through — you drive Codex / Claude Code exactly as usual — while limitping watches usage in the background and, when the 5h limit recovers after being hit, sends your continue message so a long task resumes itself instead of sitting parked.
@@ -401,6 +428,24 @@ var zhText = cliText{
 	watchDryRunFlag:        "只记录何时会触发，不真正发送",
 	watchLiveFlag:          "显示实时心电图状态行（会增加耗电）",
 	watchAlreadyRunningFmt: "watch 已在运行（pid %d，Provider %s%s，启动于 %s）；请先停止已有 watcher 再启动新的",
+
+	scheduleShort: "按固定间隔或每日指定时间执行 ping",
+	scheduleLong: `按用户指定的时间表执行 ping。它和 watch 不同: schedule 跟随你的墙钟时间,不会等待 Provider 的限额重置时刻。
+
+参数:
+  provider  可选。取值: claude、codex、spark、all。
+            默认是 all，会 ping 所有已启用的 Provider。
+
+示例:
+  limitping schedule codex --at 05:00
+  limitping schedule --at 05:00 --at 13:00 --at 21:00
+  limitping schedule spark --every 5h --dry-run`,
+	scheduleEveryFlag:  "按固定间隔重复执行（例如 5h、90m）",
+	scheduleAtFlag:     "按每日本地时间 HH:MM 执行；可重复传入，也可用逗号写多个",
+	scheduleStartedFmt: "已为 %s 启动定时 ping（%s%s）。\n",
+	scheduleNextFmt:    "下次定时 ping: %s（还有 %s）。\n",
+	scheduleRunFmt:     "===== 定时 ping: %s =====\n",
+	scheduleErrorFmt:   "本次定时执行完成，但有错误: %v\n",
 
 	continueShort: "代理该 Provider 的 CLI，并在 5h 限额恢复时自动续跑任务",
 	continueLong: `通过 limitping 启动该 Provider 的交互式 CLI。你的终端会被原样透传——照常使用 Codex / Claude Code——同时 limitping 在后台监测用量，当 5h 限额（曾打满）恢复时自动发送续跑消息，让长任务自己接着跑，而不是停在限额处。
