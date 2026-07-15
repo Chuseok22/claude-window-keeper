@@ -5,7 +5,7 @@ All notable changes to this project should be documented here.
 This project uses version tags such as `v0.2.0`. Release binaries are published
 through GitHub Actions and GoReleaser.
 
-## Unreleased
+## v0.8.0
 
 - Reset credits in `status` / `bg status` now show the remaining lifetime until
   each unredeemed credit expires (e.g. `expires Jul 27 07:50 (in 11d20h)`), so
