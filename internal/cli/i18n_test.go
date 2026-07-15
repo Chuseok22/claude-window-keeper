@@ -30,6 +30,17 @@ func TestLocalizedTextFallsBackToEnglish(t *testing.T) {
 	}
 }
 
+func TestLocalizedTextHonorsLocalePrecedence(t *testing.T) {
+	// POSIX: LC_ALL overrides LANG, so an explicit en_US wins over zh_CN.
+	setLocale(t, "zh_CN.UTF-8")
+	t.Setenv("LC_ALL", "en_US.UTF-8")
+
+	text := localizedText()
+	if !strings.Contains(text.statusShort, "usage") {
+		t.Fatalf("statusShort = %q, want English when LC_ALL=en_US overrides LANG=zh_CN", text.statusShort)
+	}
+}
+
 func TestRootCommandAliases(t *testing.T) {
 	setLocale(t, "C")
 

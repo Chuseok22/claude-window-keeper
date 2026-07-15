@@ -152,14 +152,14 @@ func runSchedule(ctx context.Context, out io.Writer, text cliText, providers []p
 		if wait < 0 {
 			wait = 0
 		}
-		fmt.Fprintf(out, text.scheduleNextFmt, next.Local().Format("2006-01-02 15:04:05"), fmtDur(wait))
+		fmt.Fprintf(out, text.scheduleNextFmt, next.Local().Format("2006-01-02 15:04:05"), fmtDur(text, wait))
 		if !sleepSchedule(ctx, wait) {
 			return nil
 		}
 		fmt.Fprintf(out, text.scheduleRunFmt, time.Now().Local().Format("2006-01-02 15:04:05"))
 		var firstErr error
 		for _, p := range providers {
-			if err := runPing(ctx, out, p, dryRun, false); err != nil && firstErr == nil {
+			if err := runPing(ctx, out, text, p, dryRun, false); err != nil && firstErr == nil {
 				firstErr = err
 			}
 		}

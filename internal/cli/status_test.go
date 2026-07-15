@@ -95,7 +95,7 @@ func TestPrintUsageCanShowRemainingPercent(t *testing.T) {
 		Weekly:   usage.Window{UsedPercent: 15},
 	}
 
-	printUsage(&out, u, false, "remaining")
+	printUsage(&out, enText, u, false, "remaining")
 
 	got := out.String()
 	if !strings.Contains(got, "99.0% remaining") || !strings.Contains(got, "85.0% remaining") {
@@ -115,7 +115,7 @@ func TestPrintUsageMarksMissingWindowNotEnforced(t *testing.T) {
 		},
 	}
 
-	printUsage(&out, u, false, "used")
+	printUsage(&out, enText, u, false, "used")
 
 	got := out.String()
 	if !strings.Contains(got, "5h     not currently enforced") {
@@ -123,6 +123,47 @@ func TestPrintUsageMarksMissingWindowNotEnforced(t *testing.T) {
 	}
 	if !strings.Contains(got, "24.0% used") {
 		t.Fatalf("status output = %q, want weekly usage rendered", got)
+	}
+}
+
+func TestPrintUsageRendersChinese(t *testing.T) {
+	var out bytes.Buffer
+	u := &usage.Usage{
+		Provider: "codex",
+		Plan:     "plus",
+		// Weekly-only regime: the 5h window is not enforced.
+		Weekly: usage.Window{
+			UsedPercent:   27,
+			ResetsAt:      time.Now().Add(24 * time.Hour),
+			WindowSeconds: 604800,
+		},
+		ResetCredits: &usage.ResetCredits{
+			AvailableCount: 1,
+			Credits: []usage.ResetCredit{
+				{
+					Status:    "available",
+					GrantedAt: time.Now().Add(-24 * time.Hour),
+					ExpiresAt: time.Now().Add(29*24*time.Hour + 2*time.Hour),
+				},
+			},
+		},
+	}
+
+	printUsage(&out, zhText, u, false, "used")
+
+	got := out.String()
+	for _, want := range []string{
+		"5h     当前未生效",
+		"周     [",
+		"27.0% 已用",
+		"后重置 (周",
+		"重置券 1 张可用",
+		"可用，发放于",
+		"有效期至",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("zh status output = %q, want it to contain %q", got, want)
+		}
 	}
 }
 
@@ -135,14 +176,14 @@ func TestPrintUsageIncludesResetCredits(t *testing.T) {
 			Credits: []usage.ResetCredit{
 				{
 					Status:    "available",
-					GrantedAt: time.Date(2026, 6, 17, 17, 38, 0, 0, time.UTC),
-					ExpiresAt: time.Date(2026, 7, 17, 17, 38, 0, 0, time.UTC),
+					GrantedAt: time.Now().Add(-24 * time.Hour),
+					ExpiresAt: time.Now().Add(29*24*time.Hour + 2*time.Hour),
 				},
 			},
 		},
 	}
 
-	printUsage(&out, u, false, "used")
+	printUsage(&out, enText, u, false, "used")
 
 	got := out.String()
 	if !strings.Contains(got, "reset credits 1 reset available") || !strings.Contains(got, "available") {

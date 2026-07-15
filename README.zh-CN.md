@@ -221,15 +221,17 @@ ping 后请用 `status` 或 `bg status` 查看权威的 5h/周窗口状态。
 
 ```
 claude
-  5h     [█████░░░░░]  51.0% used      resets in 3h14m    (Sun 00:10)
-  weekly [█████░░░░░]  54.0% used      resets in 7h04m    (Sun 04:00)
+  5h     [█████░░░░░]  51.0% 已用  3h14m 后重置 (周日 00:10)
+  周     [█████░░░░░]  54.0% 已用  7h04m 后重置 (周日 04:00)
 
 codex (plus)
-  5h     [██░░░░░░░░]  24.0% used      resets in 3h15m    (Sun 00:11)
-  weekly [████░░░░░░]  37.0% used      resets in 111h57m  (Thu 12:53)
-  reset credits 1 reset available
-    - available, granted Jun 17 17:38, expires Jul 17 17:38
+  5h     当前未生效
+  周     [████░░░░░░]  37.0% 已用  111h57m 后重置 (周四 12:53)
+  重置券 1 张可用
+    - 可用，发放于 06-17 17:38，有效期至 07-17 17:38
 ```
+
+(中文环境下输出为中文;英文环境保持 `used` / `resets in` 等英文措辞。)
 
 文本状态默认显示 **used** 百分比。若想和 Codex 界面里的“剩余用量”保持同一口径,
 可以设置 `usage_display = "remaining"`。
@@ -241,8 +243,8 @@ codex (plus)
 
 当 Provider 当前不执行某个窗口限制时,对应的窗口键(`five_hour` / `weekly`)会被
 省略——例如 OpenAI 于 2026-07-12 临时取消了 Codex 的 5 小时限制,只保留周限额。
-文本模式下这类窗口会显示 `not currently enforced`,`watch` 也会改为在周窗口重置时
-ping,而不是每 5 小时一次。
+文本模式下这类窗口会显示「当前未生效」(英文环境: `not currently enforced`),
+`watch` 也会改为在周窗口重置时 ping,而不是每 5 小时一次。
 
 ```json
 [

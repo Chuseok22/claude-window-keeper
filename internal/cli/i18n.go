@@ -29,9 +29,38 @@ type cliText struct {
 	statusJSONFlag    string
 	statusFetchingFmt string
 
-	pingShort      string
-	pingLong       string
-	pingDryRunFlag string
+	// Text-mode usage rendering (status, bg status). The en values must stay
+	// byte-identical to the historical hardcoded output.
+	statusErrorFmt            string // provider name, error
+	statusFiveHourLineFmt     string // formatted window
+	statusWeeklyLineFmt       string // formatted window
+	statusNotEnforced         string
+	statusWindowFmt           string // bar, pct, display word, countdown, clock
+	statusWindowNoResetFmt    string // bar, pct, display word
+	statusUsedWord            string
+	statusRemainingWord       string
+	statusCreditsUnlimited    string
+	statusCreditsFmt          string // balance
+	statusResetCreditsOneFmt  string // count (1)
+	statusResetCreditsManyFmt string // count (>1)
+	statusCreditAvailable     string
+	statusCreditRedeemed      string
+	statusCreditExpired       string
+	statusCreditGrantedFmt    string // datetime
+	statusCreditExpiresFmt    string // datetime
+	statusCreditRedeemedFmt   string // datetime
+	statusCreditTimeLayout    string
+	statusListSep             string
+	statusNowWord             string
+	statusWeekdays            [7]string // Sunday first; zero value = Go's "Mon" names
+
+	pingShort       string
+	pingLong        string
+	pingDryRunFlag  string
+	pingWouldRunFmt string // provider, command
+	pingSendingFmt  string // provider, spinner frame, elapsed
+	pingFailedFmt   string // provider, elapsed, error
+	pingSuccessFmt  string // provider, elapsed, usage suffix
 
 	watchShort             string
 	watchLong              string
@@ -121,6 +150,8 @@ func localizedText() cliText {
 }
 
 func isChineseLocale() bool {
+	// POSIX precedence: the first set variable decides, so LC_ALL=en_US
+	// overrides LANG=zh_CN instead of the zh entry winning from anywhere.
 	for _, key := range []string{"LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"} {
 		locale := strings.ToLower(os.Getenv(key))
 		if locale == "" {
@@ -129,10 +160,11 @@ func isChineseLocale() bool {
 		for _, part := range strings.FieldsFunc(locale, func(r rune) bool {
 			return r == ':' || r == '.' || r == '@' || r == '_' || r == '-'
 		}) {
-			if part == "zh" || strings.HasPrefix(part, "zh") {
+			if strings.HasPrefix(part, "zh") {
 				return true
 			}
 		}
+		return false
 	}
 	return false
 }
@@ -190,6 +222,28 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 	statusJSONFlag:    "output usage as JSON instead of text",
 	statusFetchingFmt: "Fetching %s usage...\n",
 
+	statusErrorFmt:            "%-7s  error: %v\n",
+	statusFiveHourLineFmt:     "  5h     %s\n",
+	statusWeeklyLineFmt:       "  weekly %s\n",
+	statusNotEnforced:         "not currently enforced",
+	statusWindowFmt:           "%s %5.1f%% %-9s resets in %-8s (%s)",
+	statusWindowNoResetFmt:    "%s %5.1f%% %-9s (no active window)",
+	statusUsedWord:            "used",
+	statusRemainingWord:       "remaining",
+	statusCreditsUnlimited:    "  credits unlimited\n",
+	statusCreditsFmt:          "  credits %s\n",
+	statusResetCreditsOneFmt:  "  reset credits %d reset available\n",
+	statusResetCreditsManyFmt: "  reset credits %d resets available\n",
+	statusCreditAvailable:     "available",
+	statusCreditRedeemed:      "redeemed",
+	statusCreditExpired:       "expired",
+	statusCreditGrantedFmt:    "granted %s",
+	statusCreditExpiresFmt:    "expires %s",
+	statusCreditRedeemedFmt:   "redeemed %s",
+	statusCreditTimeLayout:    "Jan 02 15:04",
+	statusListSep:             ", ",
+	statusNowWord:             "now",
+
 	pingShort: "Trigger a provider window now with a minimal message",
 	pingLong: `Trigger a rate-limit window immediately by sending the minimal message for the selected provider.
 
@@ -201,7 +255,11 @@ Examples:
   limitping ping
   limitping p claude
   limitping ping codex --dry-run`,
-	pingDryRunFlag: "print the command without sending",
+	pingDryRunFlag:  "print the command without sending",
+	pingWouldRunFmt: "%-7s would run: %s\n",
+	pingSendingFmt:  "\r%-7s %c sending… %s",
+	pingFailedFmt:   "%-7s ✗ failed after %s: %v\n",
+	pingSuccessFmt:  "%-7s ✓ pinged (%s%s)\n",
 
 	watchShort: "Run the foreground daemon and ping each provider when its 5h window resets",
 	watchLong: `Run the foreground daemon. When a provider's 5h window resets, limitping sends the minimal message to start the next window.
@@ -400,6 +458,29 @@ var zhText = cliText{
 	statusJSONFlag:    "以 JSON 格式输出用量，而非文本",
 	statusFetchingFmt: "正在查询 %s 用量...\n",
 
+	statusErrorFmt:            "%-7s  错误: %v\n",
+	statusFiveHourLineFmt:     "  5h     %s\n",
+	statusWeeklyLineFmt:       "  周     %s\n",
+	statusNotEnforced:         "当前未生效",
+	statusWindowFmt:           "%s %5.1f%% %s  %s 后重置 (%s)",
+	statusWindowNoResetFmt:    "%s %5.1f%% %s  (无活跃窗口)",
+	statusUsedWord:            "已用",
+	statusRemainingWord:       "剩余",
+	statusCreditsUnlimited:    "  credits 不限量\n",
+	statusCreditsFmt:          "  credits %s\n",
+	statusResetCreditsOneFmt:  "  重置券 %d 张可用\n",
+	statusResetCreditsManyFmt: "  重置券 %d 张可用\n",
+	statusCreditAvailable:     "可用",
+	statusCreditRedeemed:      "已兑换",
+	statusCreditExpired:       "已过期",
+	statusCreditGrantedFmt:    "发放于 %s",
+	statusCreditExpiresFmt:    "有效期至 %s",
+	statusCreditRedeemedFmt:   "兑换于 %s",
+	statusCreditTimeLayout:    "01-02 15:04",
+	statusListSep:             "，",
+	statusNowWord:             "现在",
+	statusWeekdays:            [7]string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"},
+
 	pingShort: "用最小消息立即触发 Provider 的限额窗口",
 	pingLong: `通过向指定 Provider 发送最小消息，立即触发一个限额窗口。
 
@@ -411,7 +492,11 @@ var zhText = cliText{
   limitping ping
   limitping p claude
   limitping ping codex --dry-run`,
-	pingDryRunFlag: "只打印将执行的命令，不真正发送",
+	pingDryRunFlag:  "只打印将执行的命令，不真正发送",
+	pingWouldRunFmt: "%-7s 将执行: %s\n",
+	pingSendingFmt:  "\r%-7s %c 发送中… %s",
+	pingFailedFmt:   "%-7s ✗ 失败 (耗时 %s): %v\n",
+	pingSuccessFmt:  "%-7s ✓ 已 ping (%s%s)\n",
 
 	watchShort: "以前台守护方式运行，并在每个 Provider 的 5h 窗口重置时自动 ping",
 	watchLong: `以前台守护方式运行。某个 Provider 的 5h 窗口重置后，limitping 会发送最小消息来开启下一个窗口。

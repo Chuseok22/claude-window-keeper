@@ -7,6 +7,10 @@ through GitHub Actions and GoReleaser.
 
 ## Unreleased
 
+- Localized the text output of `status`, `bg status`, and `ping` for Chinese
+  locales (window lines, reset credits, weekday names, error lines), and fixed
+  locale detection to honor POSIX precedence so `LC_ALL=en_US` overrides
+  `LANG=zh_CN`. English output is unchanged.
 - Adapted Codex to the weekly-only limit regime introduced on 2026-07-12 (the
   5h limit is temporarily removed): usage windows are now classified by their
   length instead of their position in the response, a missing window renders as

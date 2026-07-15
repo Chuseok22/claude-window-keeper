@@ -279,10 +279,11 @@ func runBgStatus(ctx context.Context, out io.Writer) error {
 		u, uerr := p.ReadUsage(rctx)
 		cancel()
 		if uerr != nil {
-			fmt.Fprintf(out, "%-7s  error: %v\n\n", p.Name(), uerr)
+			fmt.Fprintf(out, text.statusErrorFmt, p.Name(), uerr)
+			fmt.Fprintln(out)
 			continue
 		}
-		printUsage(out, u, false, cfg.UsageDisplay)
+		printUsage(out, text, u, false, cfg.UsageDisplay)
 	}
 
 	fmt.Fprintln(out, text.bgHintManage)

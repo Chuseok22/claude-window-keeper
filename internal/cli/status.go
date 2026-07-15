@@ -67,14 +67,14 @@ func runStatus(ctx context.Context, out, progress io.Writer, text cliText, provi
 				entries = append(entries, statusJSON{Provider: p.Name(), Error: err.Error()})
 				continue
 			}
-			fmt.Fprintf(out, "%-7s  error: %v\n", p.Name(), err)
+			fmt.Fprintf(out, text.statusErrorFmt, p.Name(), err)
 			continue
 		}
 		if jsonOut {
 			entries = append(entries, newStatusJSON(u, verbose))
 			continue
 		}
-		printUsage(out, u, verbose, display)
+		printUsage(out, text, u, verbose, display)
 	}
 	if jsonOut {
 		enc := json.NewEncoder(out)
@@ -202,47 +202,47 @@ func timeJSON(t time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-func printUsage(out io.Writer, u *usage.Usage, verbose bool, display string) {
+func printUsage(out io.Writer, text cliText, u *usage.Usage, verbose bool, display string) {
 	display = normalizeUsageDisplay(display)
 	plan := u.Plan
 	if plan != "" {
 		plan = " (" + plan + ")"
 	}
 	fmt.Fprintf(out, "%s%s\n", u.Provider, plan)
-	fmt.Fprintf(out, "  5h     %s\n", fmtWindow(u.FiveHour, display))
-	fmt.Fprintf(out, "  weekly %s\n", fmtWindow(u.Weekly, display))
+	fmt.Fprintf(out, text.statusFiveHourLineFmt, fmtWindow(text, u.FiveHour, display))
+	fmt.Fprintf(out, text.statusWeeklyLineFmt, fmtWindow(text, u.Weekly, display))
 	if u.Credits != nil && (u.Credits.HasCredits || u.Credits.Unlimited) {
 		if u.Credits.Unlimited {
-			fmt.Fprintf(out, "  credits unlimited\n")
+			fmt.Fprint(out, text.statusCreditsUnlimited)
 		} else {
-			fmt.Fprintf(out, "  credits %s\n", u.Credits.Balance)
+			fmt.Fprintf(out, text.statusCreditsFmt, u.Credits.Balance)
 		}
 	}
-	printResetCredits(out, u.ResetCredits)
+	printResetCredits(out, text, u.ResetCredits)
 	if verbose {
 		fmt.Fprintf(out, "  raw: %s\n", string(u.Raw))
 	}
 	fmt.Fprintln(out)
 }
 
-func printResetCredits(out io.Writer, rc *usage.ResetCredits) {
+func printResetCredits(out io.Writer, text cliText, rc *usage.ResetCredits) {
 	if rc == nil || (rc.AvailableCount == 0 && len(rc.Credits) == 0) {
 		return
 	}
-	countWord := "resets"
+	countFmt := text.statusResetCreditsManyFmt
 	if rc.AvailableCount == 1 {
-		countWord = "reset"
+		countFmt = text.statusResetCreditsOneFmt
 	}
-	fmt.Fprintf(out, "  reset credits %d %s available\n", rc.AvailableCount, countWord)
+	fmt.Fprintf(out, countFmt, rc.AvailableCount)
 	for _, c := range rc.Credits {
-		line := resetCreditLine(c)
+		line := resetCreditLine(text, c)
 		if line != "" {
 			fmt.Fprintf(out, "    - %s\n", line)
 		}
 	}
 }
 
-func resetCreditLine(c usage.ResetCredit) string {
+func resetCreditLine(text cliText, c usage.ResetCredit) string {
 	status := c.Status
 	if status == "" {
 		switch {
@@ -254,31 +254,59 @@ func resetCreditLine(c usage.ResetCredit) string {
 			status = "available"
 		}
 	}
-	parts := []string{status}
+	parts := []string{creditStatusWord(text, status)}
 	if !c.GrantedAt.IsZero() {
-		parts = append(parts, "granted "+c.GrantedAt.Local().Format("Jan 02 15:04"))
+		parts = append(parts, fmt.Sprintf(text.statusCreditGrantedFmt, c.GrantedAt.Local().Format(text.statusCreditTimeLayout)))
 	}
 	if !c.ExpiresAt.IsZero() {
-		parts = append(parts, "expires "+c.ExpiresAt.Local().Format("Jan 02 15:04"))
+		parts = append(parts, fmt.Sprintf(text.statusCreditExpiresFmt, c.ExpiresAt.Local().Format(text.statusCreditTimeLayout)))
 	}
 	if !c.RedeemedAt.IsZero() {
-		parts = append(parts, "redeemed "+c.RedeemedAt.Local().Format("Jan 02 15:04"))
+		parts = append(parts, fmt.Sprintf(text.statusCreditRedeemedFmt, c.RedeemedAt.Local().Format(text.statusCreditTimeLayout)))
 	}
-	return strings.Join(parts, ", ")
+	return strings.Join(parts, text.statusListSep)
 }
 
-func fmtWindow(w usage.Window, display string) string {
+// creditStatusWord localizes the well-known reset-credit statuses; anything
+// else (a new API value) passes through untranslated.
+func creditStatusWord(text cliText, status string) string {
+	switch status {
+	case "available":
+		return text.statusCreditAvailable
+	case "redeemed":
+		return text.statusCreditRedeemed
+	case "expired":
+		return text.statusCreditExpired
+	default:
+		return status
+	}
+}
+
+func fmtWindow(text cliText, w usage.Window, display string) string {
 	if w.Missing() {
-		return "not currently enforced"
+		return text.statusNotEnforced
 	}
 	display = normalizeUsageDisplay(display)
 	pct := displayedPercent(w, display)
 	bar := usageBar(pct)
-	if w.ResetsAt.IsZero() {
-		return fmt.Sprintf("%s %5.1f%% %-9s (no active window)", bar, pct, display)
+	word := text.statusUsedWord
+	if display == "remaining" {
+		word = text.statusRemainingWord
 	}
-	return fmt.Sprintf("%s %5.1f%% %-9s resets in %-8s (%s)",
-		bar, pct, display, fmtDur(w.Remaining()), w.ResetsAt.Local().Format("Mon 15:04"))
+	if w.ResetsAt.IsZero() {
+		return fmt.Sprintf(text.statusWindowNoResetFmt, bar, pct, word)
+	}
+	return fmt.Sprintf(text.statusWindowFmt,
+		bar, pct, word, fmtDur(text, w.Remaining()), fmtClock(text, w.ResetsAt))
+}
+
+// fmtClock renders the reset wall-clock time with a localized weekday name.
+func fmtClock(text cliText, t time.Time) string {
+	lt := t.Local()
+	if text.statusWeekdays == ([7]string{}) {
+		return lt.Format("Mon 15:04")
+	}
+	return text.statusWeekdays[int(lt.Weekday())] + " " + lt.Format("15:04")
 }
 
 func normalizeUsageDisplay(display string) string {
@@ -326,9 +354,9 @@ func usageBar(pct float64) string {
 	return "[" + string(b) + "]"
 }
 
-func fmtDur(d time.Duration) string {
+func fmtDur(text cliText, d time.Duration) string {
 	if d <= 0 {
-		return "now"
+		return text.statusNowWord
 	}
 	d = d.Round(time.Minute)
 	h := d / time.Hour
