@@ -152,6 +152,23 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 			continue
 		}
 
+		// A provider can stop enforcing the 5h window entirely (OpenAI
+		// temporarily removed Codex's on 2026-07-12, leaving only the weekly
+		// cap). The running weekly window is already anchored, so the next
+		// useful ping is the one that anchors the weekly window right after
+		// its reset — pinging every 5h would just burn weekly quota.
+		if u.FiveHour.Missing() && u.Weekly.Active() {
+			wait := u.Weekly.Remaining() + s.cfg.ResetBuffer.Duration
+			s.log.Printf("[%s] no 5h window (weekly-only limits, %.0f%%); next ping at weekly reset %s (in %s)",
+				name, u.Weekly.UsedPercent,
+				u.Weekly.ResetsAt.Local().Format("15:04:05"), wait.Round(time.Second))
+			s.live.set(name, fmt.Sprintf("weekly-only %.0f%% — ping at weekly reset", u.Weekly.UsedPercent), time.Now().Add(wait))
+			if !sleepCtx(ctx, wait) {
+				return
+			}
+			continue
+		}
+
 		// If the 5h window is still running, wait until it resets, then ping.
 		if u.FiveHour.Active() {
 			wait := u.FiveHour.Remaining() + s.cfg.ResetBuffer.Duration

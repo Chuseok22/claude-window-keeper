@@ -93,6 +93,60 @@ func TestCodexReadUsageSendsCompatibleHeaders(t *testing.T) {
 	}
 }
 
+// Since 2026-07-12 (5h limit temporarily removed) the weekly window arrives in
+// primary_window with secondary_window null; windows must be classified by
+// length, not position, and the missing 5h window must stay missing.
+func TestCodexReadUsageWeeklyOnlyRegime(t *testing.T) {
+	oldClient := usageHTTPClient
+	defer func() { usageHTTPClient = oldClient }()
+
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	authJSON := `{"tokens":{"access_token":"access-token","refresh_token":"refresh-token","account_id":"account-123"}}`
+	if err := os.WriteFile(filepath.Join(home, "auth.json"), []byte(authJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	usageHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.String() == "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits" {
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(strings.NewReader(`{"error":"not found"}`)),
+				Request:    req,
+			}, nil
+		}
+		body := `{
+			"plan_type": "plus",
+			"rate_limit": {
+				"allowed": true,
+				"limit_reached": false,
+				"primary_window": {"used_percent": 24, "limit_window_seconds": 604800, "reset_at": 4103049600},
+				"secondary_window": null
+			},
+			"rate_limit_reset_credits": {"available_count": 3}
+		}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Request:    req,
+		}, nil
+	})}
+
+	u, err := NewCodex(config.ProviderConfig{}).ReadUsage(context.Background())
+	if err != nil {
+		t.Fatalf("ReadUsage: %v", err)
+	}
+	if !u.FiveHour.Missing() {
+		t.Fatalf("five hour = %#v, want missing (limit not enforced)", u.FiveHour)
+	}
+	if u.Weekly.UsedPercent != 24 || u.Weekly.WindowSeconds != 604800 {
+		t.Fatalf("weekly = %#v, want the primary window classified as weekly", u.Weekly)
+	}
+	if u.ResetCredits == nil || u.ResetCredits.AvailableCount != 3 {
+		t.Fatalf("reset credits = %#v, want inline count 3 after detail endpoint failure", u.ResetCredits)
+	}
+}
+
 func TestSparkReadUsageReportsSparkProvider(t *testing.T) {
 	oldClient := usageHTTPClient
 	defer func() { usageHTTPClient = oldClient }()

@@ -20,6 +20,14 @@ func (w Window) Active() bool {
 	return w.UsedPercent > 0 && !w.ResetsAt.IsZero() && time.Now().Before(w.ResetsAt)
 }
 
+// Missing reports whether the provider returned no data for this window at
+// all, meaning the limit is not currently enforced (OpenAI temporarily removed
+// Codex's 5h window on 2026-07-12, leaving only the weekly cap). Distinct from
+// an inactive window, which is enforced but has no consumption yet.
+func (w Window) Missing() bool {
+	return w.UsedPercent == 0 && w.ResetsAt.IsZero() && w.WindowSeconds == 0
+}
+
 // Remaining returns the time until this window resets (never negative).
 func (w Window) Remaining() time.Duration {
 	if w.ResetsAt.IsZero() {

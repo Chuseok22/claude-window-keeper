@@ -136,9 +136,15 @@ func newStatusJSON(u *usage.Usage, verbose bool) statusJSON {
 	s := statusJSON{
 		Provider:     u.Provider,
 		Plan:         u.Plan,
-		FiveHour:     newWindowJSON(u.FiveHour),
-		Weekly:       newWindowJSON(u.Weekly),
 		LimitReached: u.LimitReached,
+	}
+	// A missing window means the provider does not currently enforce that
+	// limit; drop the key rather than emit an all-zero window.
+	if !u.FiveHour.Missing() {
+		s.FiveHour = newWindowJSON(u.FiveHour)
+	}
+	if !u.Weekly.Missing() {
+		s.Weekly = newWindowJSON(u.Weekly)
 	}
 	if !u.FetchedAt.IsZero() {
 		s.FetchedAt = u.FetchedAt.Format(time.RFC3339)
@@ -262,6 +268,9 @@ func resetCreditLine(c usage.ResetCredit) string {
 }
 
 func fmtWindow(w usage.Window, display string) string {
+	if w.Missing() {
+		return "not currently enforced"
+	}
 	display = normalizeUsageDisplay(display)
 	pct := displayedPercent(w, display)
 	bar := usageBar(pct)

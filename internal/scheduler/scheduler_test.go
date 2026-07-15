@@ -97,6 +97,46 @@ func TestRunTargetSleepsWhileFiveHourWindowActive(t *testing.T) {
 	}
 }
 
+func TestRunTargetWeeklyOnlySleepsUntilWeeklyReset(t *testing.T) {
+	p := &stubProvider{
+		usage: &usage.Usage{
+			// FiveHour left zero: the provider does not enforce a 5h window
+			// (Codex since 2026-07-12). Only the weekly window is running.
+			Weekly: usage.Window{
+				UsedPercent:   24,
+				ResetsAt:      time.Now().Add(time.Second),
+				WindowSeconds: 604800,
+			},
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.runTarget(ctx, Target{Provider: p})
+	}()
+
+	waitFor(t, 200*time.Millisecond, func() bool {
+		reads, _ := p.counts()
+		return reads == 1
+	})
+	time.Sleep(50 * time.Millisecond)
+	reads, triggers := p.counts()
+	if reads != 1 || triggers != 0 {
+		t.Fatalf("weekly-only regime should sleep until the weekly reset without pinging; reads=%d triggers=%d", reads, triggers)
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("runTarget did not stop after cancellation")
+	}
+}
+
 func TestRunTargetDryRunSleepsAfterEstimatedPing(t *testing.T) {
 	p := &stubProvider{
 		usage: &usage.Usage{

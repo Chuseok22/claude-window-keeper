@@ -67,6 +67,10 @@ func (c *Codex) ReadUsage(ctx context.Context) (*usage.Usage, error) {
 	u := codexUsageToUsage(c.Name(), body, r, r.RateLimit)
 	if credits, err := readCodexResetCredits(ctx, c.auth); err == nil {
 		u.ResetCredits = credits
+	} else if r.ResetCredits != nil {
+		// The detail endpoint is private and may go away; the usage response
+		// itself now embeds the available count, so keep at least that.
+		u.ResetCredits = &usage.ResetCredits{AvailableCount: r.ResetCredits.AvailableCount}
 	}
 	return u, nil
 }
@@ -133,11 +137,15 @@ type codexWindow struct {
 	ResetAt            int64   `json:"reset_at"`
 }
 
+// The windows are pointers because the backend nulls out a window when that
+// limit is not currently enforced: since OpenAI temporarily removed the 5h
+// limit on 2026-07-12, primary_window carries the weekly window and
+// secondary_window is null.
 type codexRateLimit struct {
-	Allowed      bool        `json:"allowed"`
-	LimitReached bool        `json:"limit_reached"`
-	Primary      codexWindow `json:"primary_window"`
-	Secondary    codexWindow `json:"secondary_window"`
+	Allowed      bool         `json:"allowed"`
+	LimitReached bool         `json:"limit_reached"`
+	Primary      *codexWindow `json:"primary_window"`
+	Secondary    *codexWindow `json:"secondary_window"`
 }
 
 type codexAdditionalRateLimit struct {
@@ -157,6 +165,13 @@ type codexUsageResp struct {
 	RateLimit            codexRateLimit             `json:"rate_limit"`
 	AdditionalRateLimits []codexAdditionalRateLimit `json:"additional_rate_limits"`
 	Credits              *codexCredits              `json:"credits"`
+	ResetCredits         *codexInlineResetCredits   `json:"rate_limit_reset_credits"`
+}
+
+// codexInlineResetCredits is the reset-credit count embedded in the usage
+// response itself; a fallback when the detail endpoint is unavailable.
+type codexInlineResetCredits struct {
+	AvailableCount int `json:"available_count"`
 }
 
 type codexResetCreditsResp struct {
@@ -225,14 +240,15 @@ func readCodexResetCredits(ctx context.Context, auth *auth.CodexAuth) (*usage.Re
 }
 
 func codexUsageToUsage(provider string, body []byte, r codexUsageResp, rateLimit codexRateLimit) *usage.Usage {
+	fiveHour, weekly := codexWindowsFromRateLimit(rateLimit)
 	u := &usage.Usage{
 		Provider:     provider,
 		Plan:         r.PlanType,
 		FetchedAt:    time.Now(),
 		Raw:          body,
 		LimitReached: rateLimit.LimitReached,
-		FiveHour:     codexWindowToUsage(rateLimit.Primary),
-		Weekly:       codexWindowToUsage(rateLimit.Secondary),
+		FiveHour:     fiveHour,
+		Weekly:       weekly,
 	}
 	if r.Credits != nil {
 		u.Credits = &usage.Credits{
@@ -372,6 +388,27 @@ func codexConfigPath() string {
 		return filepath.Join(".codex", "config.toml")
 	}
 	return filepath.Join(home, ".codex", "config.toml")
+}
+
+// codexWindowsFromRateLimit classifies the windows by length rather than
+// position. Historically primary was the 5h window and secondary the weekly
+// one, but with the 5h limit removed the weekly window is the (only) primary,
+// so position no longer identifies a window. A window a couple of days or
+// longer is the weekly one; anything shorter is the 5h one. A limit whose
+// window is absent stays the zero Window (usage.Window.Missing).
+func codexWindowsFromRateLimit(rl codexRateLimit) (fiveHour, weekly usage.Window) {
+	const weeklyMinSeconds = 2 * 24 * 60 * 60
+	for _, w := range []*codexWindow{rl.Primary, rl.Secondary} {
+		if w == nil {
+			continue
+		}
+		if w.LimitWindowSeconds >= weeklyMinSeconds {
+			weekly = codexWindowToUsage(*w)
+		} else {
+			fiveHour = codexWindowToUsage(*w)
+		}
+	}
+	return fiveHour, weekly
 }
 
 func codexWindowToUsage(w codexWindow) usage.Window {

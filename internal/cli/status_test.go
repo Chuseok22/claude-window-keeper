@@ -79,6 +79,9 @@ func TestRunStatusJSON(t *testing.T) {
 	if got[0].FiveHour.RemainingSeconds <= 0 {
 		t.Fatalf("entry[0].five_hour.remaining_seconds = %d, want > 0", got[0].FiveHour.RemainingSeconds)
 	}
+	if got[0].Weekly != nil {
+		t.Fatalf("entry[0].weekly = %+v, want omitted for a window the provider does not enforce", got[0].Weekly)
+	}
 	if got[1].Provider != "claude" || got[1].Error == "" {
 		t.Fatalf("entry[1] = %+v, want claude with error", got[1])
 	}
@@ -97,6 +100,29 @@ func TestPrintUsageCanShowRemainingPercent(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, "99.0% remaining") || !strings.Contains(got, "85.0% remaining") {
 		t.Fatalf("status output = %q, want remaining percentages", got)
+	}
+}
+
+func TestPrintUsageMarksMissingWindowNotEnforced(t *testing.T) {
+	var out bytes.Buffer
+	u := &usage.Usage{
+		Provider: "codex",
+		// No 5h window: Codex weekly-only regime since 2026-07-12.
+		Weekly: usage.Window{
+			UsedPercent:   24,
+			ResetsAt:      time.Now().Add(24 * time.Hour),
+			WindowSeconds: 604800,
+		},
+	}
+
+	printUsage(&out, u, false, "used")
+
+	got := out.String()
+	if !strings.Contains(got, "5h     not currently enforced") {
+		t.Fatalf("status output = %q, want missing 5h window marked as not enforced", got)
+	}
+	if !strings.Contains(got, "24.0% used") {
+		t.Fatalf("status output = %q, want weekly usage rendered", got)
 	}
 }
 

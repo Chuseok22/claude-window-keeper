@@ -239,6 +239,11 @@ codex (plus)
 会变成 `{"provider": "...", "error": "..."}`,且命令以非零码退出。加上 `-v` 可在
 `raw` 字段内嵌入各 Provider 的原始响应。
 
+当 Provider 当前不执行某个窗口限制时,对应的窗口键(`five_hour` / `weekly`)会被
+省略——例如 OpenAI 于 2026-07-12 临时取消了 Codex 的 5 小时限制,只保留周限额。
+文本模式下这类窗口会显示 `not currently enforced`,`watch` 也会改为在周窗口重置时
+ping,而不是每 5 小时一次。
+
 ```json
 [
   {

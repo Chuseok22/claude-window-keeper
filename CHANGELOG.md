@@ -5,6 +5,16 @@ All notable changes to this project should be documented here.
 This project uses version tags such as `v0.2.0`. Release binaries are published
 through GitHub Actions and GoReleaser.
 
+## Unreleased
+
+- Adapted Codex to the weekly-only limit regime introduced on 2026-07-12 (the
+  5h limit is temporarily removed): usage windows are now classified by their
+  length instead of their position in the response, a missing window renders as
+  "not currently enforced" (its key is omitted from `status --json`), and
+  `watch` pings at the weekly reset instead of every 5h while no 5h window is
+  enforced. The reset-credit count embedded in the usage response is used as a
+  fallback when the detail endpoint is unavailable.
+
 ## v0.7.0
 
 - Added `limitping schedule [provider]`, a foreground scheduler that runs pings
