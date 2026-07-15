@@ -160,6 +160,7 @@ func TestPrintUsageRendersChinese(t *testing.T) {
 		"重置券 1 张可用",
 		"可用，发放于",
 		"有效期至",
+		"(剩 29d",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("zh status output = %q, want it to contain %q", got, want)
@@ -188,6 +189,27 @@ func TestPrintUsageIncludesResetCredits(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, "reset credits 1 reset available") || !strings.Contains(got, "available") {
 		t.Fatalf("status output = %q, want reset credit summary", got)
+	}
+	if !strings.Contains(got, "(in 29d") {
+		t.Fatalf("status output = %q, want remaining lifetime on the expires part", got)
+	}
+}
+
+func TestResetCreditLineOmitsRemainingWhenRedeemedOrExpired(t *testing.T) {
+	redeemed := usage.ResetCredit{
+		Status:     "redeemed",
+		ExpiresAt:  time.Now().Add(10 * 24 * time.Hour),
+		RedeemedAt: time.Now().Add(-time.Hour),
+	}
+	if line := resetCreditLine(enText, redeemed); strings.Contains(line, "(in ") {
+		t.Fatalf("redeemed credit line = %q, want no remaining lifetime", line)
+	}
+	expired := usage.ResetCredit{
+		Status:    "expired",
+		ExpiresAt: time.Now().Add(-time.Hour),
+	}
+	if line := resetCreditLine(enText, expired); strings.Contains(line, "(in ") {
+		t.Fatalf("expired credit line = %q, want no remaining lifetime", line)
 	}
 }
 

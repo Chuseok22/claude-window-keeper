@@ -48,6 +48,7 @@ type cliText struct {
 	statusCreditExpired       string
 	statusCreditGrantedFmt    string // datetime
 	statusCreditExpiresFmt    string // datetime
+	statusCreditExpiresInFmt  string // remaining duration, appended to the expires part
 	statusCreditRedeemedFmt   string // datetime
 	statusCreditTimeLayout    string
 	statusListSep             string
@@ -239,6 +240,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 	statusCreditExpired:       "expired",
 	statusCreditGrantedFmt:    "granted %s",
 	statusCreditExpiresFmt:    "expires %s",
+	statusCreditExpiresInFmt:  " (in %s)",
 	statusCreditRedeemedFmt:   "redeemed %s",
 	statusCreditTimeLayout:    "Jan 02 15:04",
 	statusListSep:             ", ",
@@ -475,6 +477,7 @@ var zhText = cliText{
 	statusCreditExpired:       "已过期",
 	statusCreditGrantedFmt:    "发放于 %s",
 	statusCreditExpiresFmt:    "有效期至 %s",
+	statusCreditExpiresInFmt:  " (剩 %s)",
 	statusCreditRedeemedFmt:   "兑换于 %s",
 	statusCreditTimeLayout:    "01-02 15:04",
 	statusListSep:             "，",

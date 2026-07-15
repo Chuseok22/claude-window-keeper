@@ -7,6 +7,9 @@ through GitHub Actions and GoReleaser.
 
 ## Unreleased
 
+- Reset credits in `status` / `bg status` now show the remaining lifetime until
+  each unredeemed credit expires (e.g. `expires Jul 27 07:50 (in 11d20h)`), so
+  a banked reset about to lapse is visible at a glance.
 - Localized the text output of `status`, `bg status`, and `ping` for Chinese
   locales (window lines, reset credits, weekday names, error lines), and fixed
   locale detection to honor POSIX precedence so `LC_ALL=en_US` overrides

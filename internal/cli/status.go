@@ -259,7 +259,13 @@ func resetCreditLine(text cliText, c usage.ResetCredit) string {
 		parts = append(parts, fmt.Sprintf(text.statusCreditGrantedFmt, c.GrantedAt.Local().Format(text.statusCreditTimeLayout)))
 	}
 	if !c.ExpiresAt.IsZero() {
-		parts = append(parts, fmt.Sprintf(text.statusCreditExpiresFmt, c.ExpiresAt.Local().Format(text.statusCreditTimeLayout)))
+		part := fmt.Sprintf(text.statusCreditExpiresFmt, c.ExpiresAt.Local().Format(text.statusCreditTimeLayout))
+		// Remaining lifetime, so an unredeemed credit about to lapse is
+		// visible at a glance. Meaningless once redeemed or expired.
+		if remaining := time.Until(c.ExpiresAt); remaining > 0 && c.RedeemedAt.IsZero() {
+			part += fmt.Sprintf(text.statusCreditExpiresInFmt, fmtDurDays(text, remaining))
+		}
+		parts = append(parts, part)
 	}
 	if !c.RedeemedAt.IsZero() {
 		parts = append(parts, fmt.Sprintf(text.statusCreditRedeemedFmt, c.RedeemedAt.Local().Format(text.statusCreditTimeLayout)))
@@ -352,6 +358,21 @@ func usageBar(pct float64) string {
 		}
 	}
 	return "[" + string(b) + "]"
+}
+
+// fmtDurDays renders long spans with a day component (e.g. 11d16h) — reset
+// credits live for 30 days, where pure hours would be unreadable — and falls
+// back to fmtDur below one day.
+func fmtDurDays(text cliText, d time.Duration) string {
+	if d < 24*time.Hour {
+		return fmtDur(text, d)
+	}
+	days := int(d / (24 * time.Hour))
+	hours := int(d % (24 * time.Hour) / time.Hour)
+	if hours == 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	return fmt.Sprintf("%dd%dh", days, hours)
 }
 
 func fmtDur(text cliText, d time.Duration) string {

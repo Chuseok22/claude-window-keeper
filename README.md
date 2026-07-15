@@ -246,7 +246,7 @@ codex (plus)
   5h     [██░░░░░░░░]  24.0% used      resets in 3h15m    (Sun 00:11)
   weekly [████░░░░░░]  37.0% used      resets in 111h57m  (Thu 12:53)
   reset credits 1 reset available
-    - available, granted Jun 17 17:38, expires Jul 17 17:38
+    - available, granted Jun 17 17:38, expires Jul 17 17:38 (in 24d6h)
 ```
 
 Text status defaults to **used** percentage. Set `usage_display = "remaining"` if
