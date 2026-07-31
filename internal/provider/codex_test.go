@@ -16,16 +16,23 @@ import (
 	"github.com/wavever/CCLimitPing/internal/usage"
 )
 
-func TestCodexReadUsageSendsCompatibleHeaders(t *testing.T) {
-	oldClient := usageHTTPClient
-	defer func() { usageHTTPClient = oldClient }()
-
+// fakeCodexHome points CODEX_HOME at a temp dir holding credentials, so a test
+// never reads — or depends on the presence of — the real ~/.codex/auth.json.
+func fakeCodexHome(t *testing.T) {
+	t.Helper()
 	home := t.TempDir()
 	t.Setenv("CODEX_HOME", home)
 	authJSON := `{"tokens":{"access_token":"access-token","refresh_token":"refresh-token","account_id":"account-123"}}`
 	if err := os.WriteFile(filepath.Join(home, "auth.json"), []byte(authJSON), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestCodexReadUsageSendsCompatibleHeaders(t *testing.T) {
+	oldClient := usageHTTPClient
+	defer func() { usageHTTPClient = oldClient }()
+
+	fakeCodexHome(t)
 
 	usageHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if got := req.Header.Get("Authorization"); got != "Bearer access-token" {
@@ -103,12 +110,7 @@ func TestCodexReadUsageWeeklyOnlyRegime(t *testing.T) {
 	oldClient := usageHTTPClient
 	defer func() { usageHTTPClient = oldClient }()
 
-	home := t.TempDir()
-	t.Setenv("CODEX_HOME", home)
-	authJSON := `{"tokens":{"access_token":"access-token","refresh_token":"refresh-token","account_id":"account-123"}}`
-	if err := os.WriteFile(filepath.Join(home, "auth.json"), []byte(authJSON), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	fakeCodexHome(t)
 
 	usageHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.String() == "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits" {
@@ -154,12 +156,7 @@ func TestSparkReadUsageReportsSparkProvider(t *testing.T) {
 	oldClient := usageHTTPClient
 	defer func() { usageHTTPClient = oldClient }()
 
-	home := t.TempDir()
-	t.Setenv("CODEX_HOME", home)
-	authJSON := `{"tokens":{"access_token":"access-token","refresh_token":"refresh-token","account_id":"account-123"}}`
-	if err := os.WriteFile(filepath.Join(home, "auth.json"), []byte(authJSON), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	fakeCodexHome(t)
 
 	usageHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		body := `{
@@ -204,12 +201,7 @@ func TestSparkReadUsageRequiresSparkLimit(t *testing.T) {
 	oldClient := usageHTTPClient
 	defer func() { usageHTTPClient = oldClient }()
 
-	home := t.TempDir()
-	t.Setenv("CODEX_HOME", home)
-	authJSON := `{"tokens":{"access_token":"access-token","refresh_token":"refresh-token","account_id":"account-123"}}`
-	if err := os.WriteFile(filepath.Join(home, "auth.json"), []byte(authJSON), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	fakeCodexHome(t)
 
 	usageHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		body := `{
@@ -237,12 +229,7 @@ func TestCodexReadUsageIgnoresResetCreditFailure(t *testing.T) {
 	oldClient := usageHTTPClient
 	defer func() { usageHTTPClient = oldClient }()
 
-	home := t.TempDir()
-	t.Setenv("CODEX_HOME", home)
-	authJSON := `{"tokens":{"access_token":"access-token","refresh_token":"refresh-token","account_id":"account-123"}}`
-	if err := os.WriteFile(filepath.Join(home, "auth.json"), []byte(authJSON), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	fakeCodexHome(t)
 
 	usageHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.String() == "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits" {
@@ -384,6 +371,7 @@ func TestCodexInteractiveArgsDropsExecOnlyFlags(t *testing.T) {
 }
 
 func TestCodexRedeemResetCreditReportsOutcome(t *testing.T) {
+	fakeCodexHome(t)
 	var body []byte
 	useTransport(t, func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodPost || req.URL.String() != codexConsumeURL() {
@@ -391,6 +379,12 @@ func TestCodexRedeemResetCreditReportsOutcome(t *testing.T) {
 		}
 		if got := req.Header.Get("Content-Type"); got != "application/json" {
 			t.Fatalf("Content-Type = %q", got)
+		}
+		if got := req.Header.Get("Authorization"); got != "Bearer access-token" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		if got := req.Header.Get("ChatGPT-Account-Id"); got != "account-123" {
+			t.Fatalf("ChatGPT-Account-Id = %q", got)
 		}
 		var err error
 		if body, err = io.ReadAll(req.Body); err != nil {
@@ -420,6 +414,7 @@ func TestCodexRedeemResetCreditReportsOutcome(t *testing.T) {
 }
 
 func TestCodexRedeemResetCreditNormalizesCamelCaseOutcomes(t *testing.T) {
+	fakeCodexHome(t)
 	cases := map[string]string{
 		"nothingToReset":   RedeemNothingToReset,
 		"nothing_to_reset": RedeemNothingToReset,
@@ -445,6 +440,7 @@ func TestCodexRedeemResetCreditNormalizesCamelCaseOutcomes(t *testing.T) {
 }
 
 func TestCodexRedeemResetCreditRejectsOutcomelessResponse(t *testing.T) {
+	fakeCodexHome(t)
 	useTransport(t, func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -458,6 +454,7 @@ func TestCodexRedeemResetCreditRejectsOutcomelessResponse(t *testing.T) {
 }
 
 func TestCodexAutoRedeemSkipsUntilExpiryAndThenThrottles(t *testing.T) {
+	fakeCodexHome(t)
 	requests := 0
 	useTransport(t, func(req *http.Request) (*http.Response, error) {
 		requests++
