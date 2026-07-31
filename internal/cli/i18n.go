@@ -32,6 +32,7 @@ type cliText struct {
 	// Text-mode usage rendering (status, bg status). The en values must stay
 	// byte-identical to the historical hardcoded output.
 	statusErrorFmt            string // provider name, error
+	statusSubAccessError      string // translation of provider.ClaudeSubscriptionAccessError; empty = print the error's own text
 	statusFiveHourLineFmt     string // formatted window
 	statusWeeklyLineFmt       string // formatted window
 	statusNotEnforced         string
@@ -461,6 +462,7 @@ var zhText = cliText{
 	statusFetchingFmt: "正在查询 %s 用量...\n",
 
 	statusErrorFmt:            "%-7s  错误: %v\n",
+	statusSubAccessError:      "Claude 订阅访问不可用（可能是会员已到期/续费失败，或组织管理员禁用了 Claude Code）；请恢复订阅，或在 Claude Code 中改用 Anthropic API Key",
 	statusFiveHourLineFmt:     "  5h     %s\n",
 	statusWeeklyLineFmt:       "  周     %s\n",
 	statusNotEnforced:         "当前未生效",

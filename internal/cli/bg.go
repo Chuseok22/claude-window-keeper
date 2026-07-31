@@ -279,7 +279,7 @@ func runBgStatus(ctx context.Context, out io.Writer) error {
 		u, uerr := p.ReadUsage(rctx)
 		cancel()
 		if uerr != nil {
-			fmt.Fprintf(out, text.statusErrorFmt, p.Name(), uerr)
+			fmt.Fprintf(out, text.statusErrorFmt, p.Name(), localizedProviderError(text, uerr))
 			fmt.Fprintln(out)
 			continue
 		}

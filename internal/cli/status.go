@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -67,7 +68,7 @@ func runStatus(ctx context.Context, out, progress io.Writer, text cliText, provi
 				entries = append(entries, statusJSON{Provider: p.Name(), Error: err.Error()})
 				continue
 			}
-			fmt.Fprintf(out, text.statusErrorFmt, p.Name(), err)
+			fmt.Fprintf(out, text.statusErrorFmt, p.Name(), localizedProviderError(text, err))
 			continue
 		}
 		if jsonOut {
@@ -87,6 +88,14 @@ func runStatus(ctx context.Context, out, progress io.Writer, text cliText, provi
 		return fmt.Errorf("status failed for %d provider(s)", failed)
 	}
 	return nil
+}
+
+func localizedProviderError(text cliText, err error) string {
+	var accessErr *provider.ClaudeSubscriptionAccessError
+	if errors.As(err, &accessErr) && text.statusSubAccessError != "" {
+		return text.statusSubAccessError
+	}
+	return err.Error()
 }
 
 // statusJSON is the stable, documented shape emitted by `status --json`. It is

@@ -7,6 +7,11 @@ through GitHub Actions and GoReleaser.
 
 ## v0.8.0
 
+- Claude usage 429s are now disambiguated with Anthropic's free token-counting
+  endpoint: an explicit subscription-auth denial gets an actionable
+  subscription-access error, while real or inconclusive rate limits retain the
+  original 429. Claude pings also no longer report success when the interactive
+  CLI displays the same access-disabled error.
 - Reset credits in `status` / `bg status` now show the remaining lifetime until
   each unredeemed credit expires (e.g. `expires Jul 27 07:50 (in 11d20h)`), so
   a banked reset about to lapse is visible at a glance.

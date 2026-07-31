@@ -83,7 +83,9 @@ limitping bg logs -f
 - **Claude**:用 macOS 钥匙串(`Claude Code-credentials`)或 `~/.claude/.credentials.json`
   里的 OAuth token,读 `GET https://api.anthropic.com/api/oauth/usage`。触发使用带
   TTY 的交互式 `claude "<prompt>"` 会话,因此在 headless print 命令改走 Agent
-  SDK/API credits 后仍会起算 Claude 订阅窗口。
+  SDK/API credits 后仍会起算 Claude 订阅窗口。如果用量端点返回语义不明的
+  429,limitping 会调用免费且不创建 Message 的 token-counting 端点,区分真实的
+  端点限流与 Claude Code 订阅访问被禁用。
 - **Codex**:用 `~/.codex/auth.json` 里的 OAuth token,读
   `GET https://chatgpt.com/backend-api/wham/usage`。触发使用带 TTY 的交互式
   `codex "<prompt>"` 会话;headless `codex exec` 可能会消耗 token,但不一定起算

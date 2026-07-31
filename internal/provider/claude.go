@@ -3,11 +3,13 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -21,11 +23,23 @@ import (
 )
 
 const (
-	claudeUsageURL    = "https://api.anthropic.com/api/oauth/usage"
-	claudeOAuthBeta   = "oauth-2025-04-20"
-	claudeFallbackVer = "2.1.0"
-	claudeFiveHourSec = 5 * 60 * 60
-	claudeWeeklySec   = 7 * 24 * 60 * 60
+	claudeUsageURL       = "https://api.anthropic.com/api/oauth/usage"
+	claudeCountTokensURL = "https://api.anthropic.com/v1/messages/count_tokens"
+	claudeOAuthBeta      = "oauth-2025-04-20"
+	claudeAPIVersion     = "2023-06-01"
+	claudeFallbackVer    = "2.1.0"
+	claudeFiveHourSec    = 5 * 60 * 60
+	claudeWeeklySec      = 7 * 24 * 60 * 60
+
+	// The usage endpoint collapses a disabled subscription into a generic 429.
+	// Token counting is free, creates no Message, and has an independent rate
+	// limit, so it is a safe authorization probe when that 429 leaves the account
+	// state ambiguous.
+	claudeAccessProbeBody = `{"model":"claude-haiku-4-5","messages":[{"role":"user","content":"."}]}`
+	claudeOAuthOrgDenied  = "OAuth authentication is currently not allowed for this organization"
+	claudeOAuthOrgCode    = "oauth_org_not_allowed"
+	claudeDisabledText    = "Your organization has disabled Claude subscription access for Claude Code"
+	claudeProbeTimeout    = 10 * time.Second
 
 	// Interactive-trigger timing. The 5h window anchors when the submitted
 	// prompt's request is dispatched, so we wait for the TUI to render and
@@ -44,7 +58,21 @@ const (
 var (
 	claudeUserAgentOnce sync.Once
 	claudeUserAgent     string
+	claudeANSIEscapeRE  = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+	claudeNonTextRE     = regexp.MustCompile(`[^a-z0-9_]+`)
 )
+
+// ClaudeSubscriptionAccessError means Anthropic accepted the OAuth identity
+// but explicitly rejected Claude Code subscription authentication. It wraps the
+// failure it was diagnosed from (if any), so status-aware callers — e.g. the
+// scheduler honoring a usage 429's Retry-After — keep seeing it.
+type ClaudeSubscriptionAccessError struct{ Err error }
+
+func (*ClaudeSubscriptionAccessError) Error() string {
+	return "Claude subscription access is unavailable (the plan may have expired, or an organization admin may have disabled Claude Code); renew or re-enable the subscription, or use an Anthropic API key in Claude Code"
+}
+
+func (e *ClaudeSubscriptionAccessError) Unwrap() error { return e.Err }
 
 // Claude reads usage via the OAuth usage endpoint and triggers windows via the
 // interactive, TTY-backed Claude Code CLI. Print mode is intentionally avoided
@@ -95,7 +123,7 @@ func (c *Claude) ReadUsage(ctx context.Context) (*usage.Usage, error) {
 		return req, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, diagnoseClaudeUsageError(ctx, c.auth, err)
 	}
 
 	var r claudeUsageResp
@@ -120,6 +148,85 @@ func (c *Claude) ReadUsage(ctx context.Context) (*usage.Usage, error) {
 	}
 	u.LimitReached = u.FiveHour.UsedPercent >= 100 || u.Weekly.UsedPercent >= 100
 	return u, nil
+}
+
+// diagnoseClaudeUsageError resolves the ambiguity unique to Claude's OAuth
+// usage endpoint: a disabled subscription can be returned as the same generic
+// 429 used for a real endpoint throttle. Any inconclusive probe deliberately
+// preserves the original error, preventing false subscription warnings.
+func diagnoseClaudeUsageError(ctx context.Context, src tokenSource, usageErr error) error {
+	var httpErr *UsageHTTPError
+	if !errors.As(usageErr, &httpErr) || httpErr.StatusCode != http.StatusTooManyRequests {
+		return usageErr
+	}
+	if claudeSubscriptionAccessUnavailable(ctx, src) {
+		return &ClaudeSubscriptionAccessError{Err: usageErr}
+	}
+	return usageErr
+}
+
+// claudeSubscriptionAccessUnavailable checks the inference authorization gate
+// through Anthropic's zero-cost token-counting endpoint. The token was just
+// accepted by the usage endpoint (a 429 is not an auth failure), so no
+// reload/refresh ladder is needed here: anything but an explicit denial is
+// inconclusive and leaves the original error untouched.
+func claudeSubscriptionAccessUnavailable(ctx context.Context, src tokenSource) bool {
+	probeCtx, cancel := context.WithTimeout(ctx, claudeProbeTimeout)
+	defer cancel()
+
+	token, err := src.Token(probeCtx)
+	if err != nil || token == "" {
+		return false
+	}
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodPost, claudeCountTokensURL,
+		strings.NewReader(claudeAccessProbeBody))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("anthropic-version", claudeAPIVersion)
+	req.Header.Set("anthropic-beta", claudeOAuthBeta)
+	req.Header.Set("User-Agent", claudeCodeUserAgent())
+
+	resp, err := usageHTTPClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return false
+	}
+	return claudeSubscriptionDeniedResponse(resp.StatusCode, body)
+}
+
+func claudeSubscriptionDeniedResponse(status int, body []byte) bool {
+	if status != http.StatusUnauthorized && status != http.StatusForbidden {
+		return false
+	}
+	return claudeAccessDenied(string(body))
+}
+
+// claudeAccessDenied matches Anthropic's subscription-denial wording in both an
+// API error body and Claude Code's own rendered output. Everything that is not
+// alphanumeric is collapsed first — ANSI escapes, JSON punctuation, and the
+// line breaks and box borders the TUI injects when it wraps these sentences —
+// so one matcher serves both and neither casing nor wrapping defeats it.
+func claudeAccessDenied(text string) bool {
+	plain := claudeNormalizedText(text)
+	for _, denial := range []string{claudeDisabledText, claudeOAuthOrgDenied, claudeOAuthOrgCode} {
+		if strings.Contains(plain, claudeNormalizedText(denial)) {
+			return true
+		}
+	}
+	return false
+}
+
+func claudeNormalizedText(text string) string {
+	stripped := claudeANSIEscapeRE.ReplaceAllString(text, " ")
+	return claudeNonTextRE.ReplaceAllString(strings.ToLower(stripped), " ")
 }
 
 func claudeCodeUserAgent() string {
@@ -221,6 +328,9 @@ func (c *Claude) Trigger(ctx context.Context, dryRun bool) (*TriggerResult, erro
 		case <-done:
 		case <-time.After(time.Second):
 		}
+		if accessErr := claudeSubscriptionErrorFromOutput(output.Bytes()); accessErr != nil {
+			return res, accessErr
+		}
 		return res, nil
 	}
 }
@@ -253,6 +363,9 @@ func claudeAwait(ctx context.Context, cmd *exec.Cmd, ptmx *os.File, output *limi
 }
 
 func claudeInteractiveErr(err error, output *limitedBuffer) error {
+	if accessErr := claudeSubscriptionErrorFromOutput(output.Bytes()); accessErr != nil {
+		return accessErr
+	}
 	if err == nil {
 		return nil
 	}
@@ -263,6 +376,16 @@ func claudeInteractiveErr(err error, output *limitedBuffer) error {
 	return fmt.Errorf("claude interactive failed: %w: %s", err, tail)
 }
 
+// claudeSubscriptionErrorFromOutput reports the denial Claude Code printed
+// itself: it exits cleanly after showing this error, so without it a ping that
+// started no window would be reported as a success.
+func claudeSubscriptionErrorFromOutput(raw []byte) error {
+	if claudeAccessDenied(string(raw)) {
+		return &ClaudeSubscriptionAccessError{}
+	}
+	return nil
+}
+
 func claudeInteractiveCancel(ctx context.Context, cmd *exec.Cmd, ptmx *os.File, done <-chan error, output *limitedBuffer) error {
 	if cmd.Process != nil {
 		_ = cmd.Process.Kill()
@@ -271,6 +394,9 @@ func claudeInteractiveCancel(ctx context.Context, cmd *exec.Cmd, ptmx *os.File, 
 	select {
 	case <-done:
 	case <-time.After(time.Second):
+	}
+	if accessErr := claudeSubscriptionErrorFromOutput(output.Bytes()); accessErr != nil {
+		return accessErr
 	}
 	tail := truncate(output.Bytes(), 300)
 	if tail == "" {

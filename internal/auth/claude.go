@@ -28,6 +28,14 @@ const (
 	claudeTokenEndpoint   = "https://console.anthropic.com/v1/oauth/token"
 )
 
+// authHTTPClient performs the OAuth refresh requests; swapped in tests (the
+// same seam the provider package uses for its usage client).
+var authHTTPClient = http.DefaultClient
+
+// claudeKeychainEnabled gates the macOS Keychain path. Tests disable it so
+// they never read from — or write fake credentials into — the real Keychain.
+var claudeKeychainEnabled = runtime.GOOS == "darwin"
+
 // ClaudeAuth provides a current Claude access token, reloading from the store
 // (Keychain on macOS, ~/.claude/.credentials.json elsewhere) and refreshing via
 // the refresh token when needed.
@@ -90,7 +98,7 @@ func (a *ClaudeAuth) Refresh(ctx context.Context) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := authHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("claude token refresh: %w", err)
 	}
@@ -164,7 +172,7 @@ func (a *ClaudeAuth) persistLocked(expiresIn int64) {
 // readClaudeBlob returns the raw credentials JSON and (on macOS) the Keychain
 // account name for write-back.
 func readClaudeBlob() (raw []byte, account string, err error) {
-	if runtime.GOOS == "darwin" {
+	if claudeKeychainEnabled {
 		out, err := exec.Command("security", "find-generic-password",
 			"-s", claudeKeychainService, "-w").Output()
 		if err == nil && len(bytes.TrimSpace(out)) > 0 {
@@ -179,7 +187,7 @@ func readClaudeBlob() (raw []byte, account string, err error) {
 	path := filepath.Join(home, ".claude", ".credentials.json")
 	b, ferr := os.ReadFile(path)
 	if ferr != nil {
-		if runtime.GOOS == "darwin" {
+		if claudeKeychainEnabled {
 			return nil, "", fmt.Errorf("claude credentials not found in Keychain (%q) or %s", claudeKeychainService, path)
 		}
 		return nil, "", fmt.Errorf("claude credentials not found at %s: %w", path, ferr)
@@ -204,7 +212,7 @@ func keychainAccount() string {
 }
 
 func writeClaudeBlob(blob []byte, account string) error {
-	if runtime.GOOS == "darwin" {
+	if claudeKeychainEnabled {
 		args := []string{"add-generic-password", "-U", "-s", claudeKeychainService, "-w", string(blob)}
 		if account != "" {
 			args = append(args, "-a", account)

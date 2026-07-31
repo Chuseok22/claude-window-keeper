@@ -96,7 +96,10 @@ and pings as soon as the window resets.
   `~/.claude/.credentials.json`. Triggering uses a TTY-backed interactive
   `claude "<prompt>"` session, so it continues to start the Claude
   subscription-backed window after the headless print command moves to Agent
-  SDK/API credits.
+  SDK/API credits. If the usage endpoint returns an ambiguous 429, limitping
+  uses the free token-counting endpoint (which does not create a Message) to
+  distinguish a real endpoint throttle from Claude Code subscription access
+  being disabled.
 - **Codex**: reads `GET https://chatgpt.com/backend-api/wham/usage` using the
   OAuth token from `~/.codex/auth.json`. Triggering uses a TTY-backed
   interactive `codex "<prompt>"` session; headless `codex exec` can consume

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -84,6 +85,40 @@ func TestRunStatusJSON(t *testing.T) {
 	}
 	if got[1].Provider != "claude" || got[1].Error == "" {
 		t.Fatalf("entry[1] = %+v, want claude with error", got[1])
+	}
+}
+
+func TestRunStatusLocalizesClaudeSubscriptionAccessError(t *testing.T) {
+	var out bytes.Buffer
+	p := fakeStatusProvider{name: "claude", err: &provider.ClaudeSubscriptionAccessError{}}
+
+	err := runStatus(context.Background(), &out, io.Discard, zhText, []provider.Provider{p}, false, false, "used")
+	if err == nil {
+		t.Fatal("runStatus() error = nil, want provider failure")
+	}
+	got := out.String()
+	if !strings.Contains(got, "Claude 订阅访问不可用") ||
+		!strings.Contains(got, "会员已到期/续费失败") ||
+		!strings.Contains(got, "Anthropic API Key") {
+		t.Fatalf("localized status output = %q", got)
+	}
+}
+
+func TestRunStatusJSONPreservesClaudeSubscriptionError(t *testing.T) {
+	var out bytes.Buffer
+	p := fakeStatusProvider{name: "claude", err: &provider.ClaudeSubscriptionAccessError{}}
+
+	err := runStatus(context.Background(), &out, io.Discard, zhText, []provider.Provider{p}, false, true, "used")
+	if err == nil {
+		t.Fatal("runStatus() error = nil, want provider failure")
+	}
+	var got []statusJSON
+	if jsonErr := json.Unmarshal(out.Bytes(), &got); jsonErr != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", jsonErr, out.String())
+	}
+	want := (&provider.ClaudeSubscriptionAccessError{}).Error()
+	if len(got) != 1 || got[0].Provider != "claude" || got[0].Error != want {
+		t.Fatalf("JSON status = %+v, want claude error %q", got, want)
 	}
 }
 
