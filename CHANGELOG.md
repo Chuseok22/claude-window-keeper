@@ -5,7 +5,7 @@ All notable changes to this project should be documented here.
 This project uses version tags such as `v0.2.0`. Release binaries are published
 through GitHub Actions and GoReleaser.
 
-## Unreleased
+## v0.9.0
 
 - New `limitping redeem` spends a banked Codex rate-limit reset credit (with
   `--dry-run` to see which one first). Setting `auto_redeem = true` under
