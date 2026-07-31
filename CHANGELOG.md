@@ -5,13 +5,28 @@ All notable changes to this project should be documented here.
 This project uses version tags such as `v0.2.0`. Release binaries are published
 through GitHub Actions and GoReleaser.
 
-## v0.8.0
+## Unreleased
 
+- New `limitping redeem` spends a banked Codex rate-limit reset credit (with
+  `--dry-run` to see which one first). Setting `auto_redeem = true` under
+  `[codex]` lets `watch` and `continue` spend one on their own once it is close
+  to lapsing — within 24h with usage worth reclaiming, or in its final hour.
+  Redeeming is irreversible, so it stays off by default; the backend refuses
+  with "nothing to reset" when no window is eligible, so a credit is never
+  burned for nothing.
+- Reset and expiry times in `status` / `bg status` now carry their UTC offset
+  (e.g. `resets in 3h14m (Sun 00:10 UTC+8)`), so a time read from a log or a
+  screenshot taken in another zone is unambiguous. The offset is used rather
+  than the zone abbreviation because abbreviations collide (CST is both China
+  and US Central).
 - Claude usage 429s are now disambiguated with Anthropic's free token-counting
   endpoint: an explicit subscription-auth denial gets an actionable
   subscription-access error, while real or inconclusive rate limits retain the
   original 429. Claude pings also no longer report success when the interactive
   CLI displays the same access-disabled error.
+
+## v0.8.0
+
 - Reset credits in `status` / `bg status` now show the remaining lifetime until
   each unredeemed credit expires (e.g. `expires Jul 27 07:50 (in 11d20h)`), so
   a banked reset about to lapse is visible at a glance.

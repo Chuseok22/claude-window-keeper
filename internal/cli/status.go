@@ -268,7 +268,10 @@ func resetCreditLine(text cliText, c usage.ResetCredit) string {
 		parts = append(parts, fmt.Sprintf(text.statusCreditGrantedFmt, c.GrantedAt.Local().Format(text.statusCreditTimeLayout)))
 	}
 	if !c.ExpiresAt.IsZero() {
-		part := fmt.Sprintf(text.statusCreditExpiresFmt, c.ExpiresAt.Local().Format(text.statusCreditTimeLayout))
+		// The zone is stated on the expiry — the one date on this line that is a
+		// deadline to act on — and carries the line's other stamps with it.
+		expires := c.ExpiresAt.Local()
+		part := fmt.Sprintf(text.statusCreditExpiresFmt, expires.Format(text.statusCreditTimeLayout)+" "+fmtZone(expires))
 		// Remaining lifetime, so an unredeemed credit about to lapse is
 		// visible at a glance. Meaningless once redeemed or expired.
 		if remaining := time.Until(c.ExpiresAt); remaining > 0 && c.RedeemedAt.IsZero() {
@@ -315,13 +318,33 @@ func fmtWindow(text cliText, w usage.Window, display string) string {
 		bar, pct, word, fmtDur(text, w.Remaining()), fmtClock(text, w.ResetsAt))
 }
 
-// fmtClock renders the reset wall-clock time with a localized weekday name.
+// fmtClock renders the reset wall-clock time with a localized weekday name and
+// the zone it is expressed in.
 func fmtClock(text cliText, t time.Time) string {
 	lt := t.Local()
-	if text.statusWeekdays == ([7]string{}) {
-		return lt.Format("Mon 15:04")
+	clock := lt.Format("Mon 15:04")
+	if text.statusWeekdays != ([7]string{}) {
+		clock = text.statusWeekdays[int(lt.Weekday())] + " " + lt.Format("15:04")
 	}
-	return text.statusWeekdays[int(lt.Weekday())] + " " + lt.Format("15:04")
+	return clock + " " + fmtZone(lt)
+}
+
+// fmtZone renders t's UTC offset (UTC+8, UTC-5:30, UTC). The offset is used
+// rather than the zone abbreviation because abbreviations are ambiguous — CST
+// is both China Standard Time and US Central Standard Time.
+func fmtZone(t time.Time) string {
+	_, offset := t.Zone()
+	if offset == 0 {
+		return "UTC"
+	}
+	sign := "+"
+	if offset < 0 {
+		sign, offset = "-", -offset
+	}
+	if minutes := offset % 3600 / 60; minutes != 0 {
+		return fmt.Sprintf("UTC%s%d:%02d", sign, offset/3600, minutes)
+	}
+	return fmt.Sprintf("UTC%s%d", sign, offset/3600)
 }
 
 func normalizeUsageDisplay(display string) string {

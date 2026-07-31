@@ -131,6 +131,7 @@ func (a *continueArmer) observe(u *usage.Usage, sawLimitMsg bool) bool {
 func watchAndContinue(ctx context.Context, p provider.Provider, inject *sessionInjector, msg string, cfg config.Config, det *limitDetector, lg *proxyLogger) {
 	lg.logf("watcher: polling %s usage every %s", p.Name(), proxyPoll)
 	armer := &continueArmer{weeklyThreshold: cfg.WeeklyThreshold}
+	autoRedeem := providerConfig(cfg, p.Name()).AutoRedeem
 	lastLine := ""
 	logState := func(format string, args ...any) {
 		line := fmt.Sprintf(format, args...)
@@ -147,6 +148,10 @@ func watchAndContinue(ctx context.Context, p provider.Provider, inject *sessionI
 		switch {
 		case err != nil:
 			logState("usage read error: %v", err)
+		// A spent credit resets the windows, so u is stale: skip the rest of
+		// this cycle and decide from the next poll.
+		case autoRedeem && redeemExpiringCredit(ctx, p, u, lg):
+			lastLine = ""
 		case armer.observe(u, det.seen()):
 			lg.logf("RECOVERED 5h=%.0f%% weekly=%.0f%% — injecting %q", u.FiveHour.UsedPercent, u.Weekly.UsedPercent, msg)
 			lastLine = ""
@@ -166,6 +171,29 @@ func watchAndContinue(ctx context.Context, p provider.Provider, inject *sessionI
 		case <-time.After(proxyPoll):
 		}
 	}
+}
+
+// redeemExpiringCredit spends a banked reset credit that is about to lapse.
+// It reports whether the rate-limit windows were actually reset; the provider
+// throttles its own attempts, so calling this every poll is fine.
+func redeemExpiringCredit(ctx context.Context, p provider.Provider, u *usage.Usage, lg *proxyLogger) bool {
+	redeemer, ok := p.(provider.ResetCreditRedeemer)
+	if !ok {
+		return false
+	}
+	rctx, cancel := context.WithTimeout(ctx, proxyReadTimeout)
+	outcome, err := redeemer.AutoRedeemResetCredit(rctx, u)
+	cancel()
+	switch {
+	case err != nil:
+		lg.logf("reset credit redeem failed: %v", err)
+	case outcome == provider.RedeemReset:
+		lg.logf("REDEEMED an expiring reset credit — rate-limit windows reset")
+		return true
+	case outcome != "":
+		lg.logf("reset credit not spent: %s", outcome)
+	}
+	return false
 }
 
 // sessionInjector serializes synthetic keystrokes into the proxied child's PTY:

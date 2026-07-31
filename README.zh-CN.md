@@ -170,6 +170,8 @@ limitping watch --live         # 可选:显示实时心电图状态行
 limitping watch --dry-run      # 只记录何时会触发,不真正发送
 limitping schedule codex --at 05:00 --at 13:00  # 按每日指定时间 ping
 limitping schedule --every 5h  # 按固定间隔 ping,不跟随重置时间
+limitping redeem --dry-run     # 查看会用掉哪一张 Codex 重置卡
+limitping redeem               # 立即使用(不可撤销)
 limitping continue codex       # 代理 CLI;5h 限额恢复时自动续跑任务
 limitping continue codex --yolo             # Provider 后面的参数原样透传
 limitping continue claude --dangerously-skip-permissions
@@ -223,14 +225,14 @@ ping 后请用 `status` 或 `bg status` 查看权威的 5h/周窗口状态。
 
 ```
 claude
-  5h     [█████░░░░░]  51.0% 已用  3h14m 后重置 (周日 00:10)
-  周     [█████░░░░░]  54.0% 已用  7h04m 后重置 (周日 04:00)
+  5h     [█████░░░░░]  51.0% 已用  3h14m 后重置 (周日 00:10 UTC+8)
+  周     [█████░░░░░]  54.0% 已用  7h04m 后重置 (周日 04:00 UTC+8)
 
 codex (plus)
   5h     当前未生效
-  周     [████░░░░░░]  37.0% 已用  111h57m 后重置 (周四 12:53)
+  周     [████░░░░░░]  37.0% 已用  111h57m 后重置 (周四 12:53 UTC+8)
   重置券 1 张可用
-    - 可用，发放于 06-17 17:38，有效期至 07-17 17:38 (剩 24d6h)
+    - 可用，发放于 06-17 17:38，有效期至 07-17 17:38 UTC+8 (剩 24d6h)
 ```
 
 (中文环境下输出为中文;英文环境保持 `used` / `resets in` 等英文措辞。)

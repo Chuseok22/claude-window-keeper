@@ -1,7 +1,11 @@
 package provider
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -27,9 +32,14 @@ const (
 	codexDefaultBaseURL = "https://chatgpt.com/backend-api"
 	codexChatGPTPath    = "/wham/usage"
 	codexResetPath      = "/wham/rate-limit-reset-credits"
+	codexConsumePath    = "/wham/rate-limit-reset-credits/consume"
 	codexAPIPath        = "/api/codex/usage"
 	codexUserAgent      = "limitping"
 	sparkDefaultModel   = "gpt-5.3-codex-spark"
+
+	// codexRedeemCooldown throttles the automatic redemption path so a
+	// once-a-minute poll loop cannot re-attempt a refused redemption every cycle.
+	codexRedeemCooldown = 15 * time.Minute
 
 	codexTurnMinWait  = 4 * time.Second
 	codexTurnQuiet    = 2500 * time.Millisecond
@@ -44,6 +54,9 @@ const (
 type Codex struct {
 	cfg  config.ProviderConfig
 	auth *auth.CodexAuth
+
+	redeemMu   sync.Mutex
+	lastRedeem time.Time // last automatic redemption attempt, for the cooldown
 }
 
 func NewCodex(cfg config.ProviderConfig) *Codex {
@@ -77,6 +90,104 @@ func (c *Codex) ReadUsage(ctx context.Context) (*usage.Usage, error) {
 
 func (c *Codex) Trigger(ctx context.Context, dryRun bool) (*TriggerResult, error) {
 	return triggerCodex(ctx, c.cfg, dryRun)
+}
+
+// RedeemResetCredit spends the next available reset credit right now. Each call
+// is a distinct attempt, so it carries a fresh idempotency key.
+func (c *Codex) RedeemResetCredit(ctx context.Context) (string, error) {
+	return c.consumeResetCredit(ctx, randomIdempotencyKey())
+}
+
+// AutoRedeemResetCredit spends a credit that is about to lapse, at most once per
+// codexRedeemCooldown. The key is derived from the credit itself, so an attempt
+// whose response was lost in flight is retried — after the cooldown — under the
+// same key and cannot spend a second credit.
+func (c *Codex) AutoRedeemResetCredit(ctx context.Context, u *usage.Usage) (string, error) {
+	credit, ok := u.ResetCreditToRedeem(time.Now())
+	if !ok {
+		return "", nil
+	}
+	c.redeemMu.Lock()
+	if time.Since(c.lastRedeem) < codexRedeemCooldown {
+		c.redeemMu.Unlock()
+		return "", nil
+	}
+	c.lastRedeem = time.Now()
+	c.redeemMu.Unlock()
+	return c.consumeResetCredit(ctx, creditIdempotencyKey(credit))
+}
+
+// consumeResetCredit redeems one banked reset credit. The credit id is
+// deliberately omitted: the backend then picks the next available credit — the
+// same one the policy targets — so we don't depend on an id field this private
+// endpoint doesn't document.
+func (c *Codex) consumeResetCredit(ctx context.Context, idempotencyKey string) (string, error) {
+	payload, err := json.Marshal(map[string]string{"idempotency_key": idempotencyKey})
+	if err != nil {
+		return "", err
+	}
+	accountID, _ := c.auth.AccountID(ctx)
+	body, err := fetchWithAuth(ctx, c.auth, func(token string) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, codexConsumeURL(), bytes.NewReader(payload))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", codexUserAgent)
+		req.Header.Set("OpenAI-Beta", "codex-1")
+		req.Header.Set("originator", "Codex Desktop")
+		if accountID != "" {
+			req.Header.Set("ChatGPT-Account-Id", accountID)
+		}
+		return req, nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("codex reset credit consume: %w", err)
+	}
+	var r struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", fmt.Errorf("codex reset credit consume: parsing response: %w", err)
+	}
+	if r.Code == "" {
+		return "", fmt.Errorf("codex reset credit consume: no outcome in response: %s", truncate(body, 200))
+	}
+	return normalizeRedeemOutcome(r.Code), nil
+}
+
+// normalizeRedeemOutcome folds the two spellings of the same outcomes into the
+// snake_case form we report: the private endpoint answers in snake_case, while
+// Codex's app-server protocol spells them in camelCase. Unknown codes pass
+// through untouched rather than being reported as a success.
+func normalizeRedeemOutcome(code string) string {
+	switch code {
+	case "nothingToReset":
+		return RedeemNothingToReset
+	case "noCredit":
+		return RedeemNoCredit
+	case "alreadyRedeemed":
+		return RedeemAlreadyRedeemed
+	default:
+		return code
+	}
+}
+
+func randomIdempotencyKey() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("limitping-%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
+
+// creditIdempotencyKey derives a stable key from the credit being spent, so the
+// same credit always maps to the same logical attempt.
+func creditIdempotencyKey(c usage.ResetCredit) string {
+	sum := sha256.Sum256([]byte("limitping-reset-credit|" + c.ExpiresAt.UTC().Format(time.RFC3339)))
+	return hex.EncodeToString(sum[:16])
 }
 
 // Spark is a separate provider backed by Codex auth and CLI transport.
@@ -345,13 +456,29 @@ func codexUsageURLFromBase(base string) string {
 }
 
 func codexResetCreditsURLFromBase(base string) string {
+	return codexResetURLFromBase(base, codexResetPath)
+}
+
+func codexConsumeURL() string {
+	base := codexDefaultBaseURL
+	if contents, err := os.ReadFile(codexConfigPath()); err == nil {
+		if configured := parseCodexBaseURL(string(contents)); configured != "" {
+			base = configured
+		}
+	}
+	return codexResetURLFromBase(base, codexConsumePath)
+}
+
+// codexResetURLFromBase builds a reset-credit endpoint. These live only on the
+// ChatGPT backend, so a base pointing elsewhere falls back to the default.
+func codexResetURLFromBase(base, path string) string {
 	normalized := normalizeCodexBaseURL(base)
 	if !strings.Contains(normalized, "/backend-api") {
 		normalized = codexDefaultBaseURL
 	}
-	endpoint := normalized + codexResetPath
+	endpoint := normalized + path
 	if _, err := url.ParseRequestURI(endpoint); err != nil {
-		return codexDefaultBaseURL + codexResetPath
+		return codexDefaultBaseURL + path
 	}
 	return endpoint
 }

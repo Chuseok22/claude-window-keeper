@@ -186,6 +186,8 @@ limitping watch --live         # optional live heartbeat/status line
 limitping watch --dry-run      # log when pings would fire, without sending
 limitping schedule codex --at 05:00 --at 13:00  # ping at daily local times
 limitping schedule --every 5h  # ping on a fixed interval instead of reset time
+limitping redeem --dry-run     # show which Codex reset credit would be spent
+limitping redeem               # spend it now (irreversible)
 limitping continue codex       # proxy the CLI; auto-resume the task on 5h recovery
 limitping continue codex --yolo             # flags after the provider pass through
 limitping continue claude --dangerously-skip-permissions
@@ -242,14 +244,14 @@ Example `status`:
 
 ```
 claude
-  5h     [█████░░░░░]  51.0% used      resets in 3h14m    (Sun 00:10)
-  weekly [█████░░░░░]  54.0% used      resets in 7h04m    (Sun 04:00)
+  5h     [█████░░░░░]  51.0% used      resets in 3h14m    (Sun 00:10 UTC+8)
+  weekly [█████░░░░░]  54.0% used      resets in 7h04m    (Sun 04:00 UTC+8)
 
 codex (plus)
-  5h     [██░░░░░░░░]  24.0% used      resets in 3h15m    (Sun 00:11)
-  weekly [████░░░░░░]  37.0% used      resets in 111h57m  (Thu 12:53)
+  5h     [██░░░░░░░░]  24.0% used      resets in 3h15m    (Sun 00:11 UTC+8)
+  weekly [████░░░░░░]  37.0% used      resets in 111h57m  (Thu 12:53 UTC+8)
   reset credits 1 reset available
-    - available, granted Jun 17 17:38, expires Jul 17 17:38 (in 24d6h)
+    - available, granted Jun 17 17:38, expires Jul 17 17:38 UTC+8 (in 24d6h)
 ```
 
 Text status defaults to **used** percentage. Set `usage_display = "remaining"` if

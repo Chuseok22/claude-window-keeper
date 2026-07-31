@@ -272,3 +272,35 @@ func (f fakeStatusProvider) ReadUsage(context.Context) (*usage.Usage, error) {
 func (f fakeStatusProvider) Trigger(context.Context, bool) (*provider.TriggerResult, error) {
 	return nil, nil
 }
+
+func TestFmtZoneRendersOffsetNotAbbreviation(t *testing.T) {
+	cases := []struct {
+		name string
+		zone *time.Location
+		want string
+	}{
+		{"whole hours east", time.FixedZone("CST", 8*3600), "UTC+8"},
+		{"whole hours west", time.FixedZone("EST", -5*3600), "UTC-5"},
+		{"half-hour offset", time.FixedZone("IST", 5*3600+1800), "UTC+5:30"},
+		{"utc", time.UTC, "UTC"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := fmtZone(time.Date(2026, 7, 31, 12, 0, 0, 0, tc.zone)); got != tc.want {
+				t.Fatalf("fmtZone() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFmtWindowAndResetCreditCarryTheZone(t *testing.T) {
+	zone := fmtZone(time.Now())
+	w := usage.Window{UsedPercent: 45, ResetsAt: time.Now().Add(3 * time.Hour), WindowSeconds: 18000}
+	if got := fmtWindow(enText, w, "used"); !strings.Contains(got, zone) {
+		t.Fatalf("window line = %q, want the zone %q", got, zone)
+	}
+	credit := usage.ResetCredit{Status: "available", ExpiresAt: time.Now().Add(10 * 24 * time.Hour)}
+	if got := resetCreditLine(enText, credit); !strings.Contains(got, zone) {
+		t.Fatalf("credit line = %q, want the zone %q on the expiry", got, zone)
+	}
+}

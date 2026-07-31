@@ -56,6 +56,14 @@ type ResetCredit struct {
 	RedeemedAt time.Time
 }
 
+// Redeemable reports whether c can still be spent at now.
+func (c ResetCredit) Redeemable(now time.Time) bool {
+	if !c.RedeemedAt.IsZero() || c.ExpiresAt.IsZero() || !now.Before(c.ExpiresAt) {
+		return false
+	}
+	return c.Status == "" || c.Status == "available"
+}
+
 // ResetCredits summarizes account-backed Codex reset credits.
 type ResetCredits struct {
 	AvailableCount int
@@ -73,6 +81,50 @@ type Usage struct {
 	LimitReached bool
 	FetchedAt    time.Time
 	Raw          []byte // raw JSON body, for `status -v`
+}
+
+// Reset-credit auto-redeem policy. A credit that lapses unused is worth
+// nothing, but redeeming one while the windows are near-empty reclaims nothing
+// either — so a credit is only spent close to expiry: while there is real
+// consumption to win back, or, in the final hour, unconditionally. The backend
+// answers "nothing to reset" when no window is actually eligible, so that
+// last-hour attempt cannot burn a credit for nothing.
+const (
+	redeemExpirySoon     = 24 * time.Hour
+	redeemLastChance     = time.Hour
+	redeemUsedPercentMin = 50
+)
+
+// ResetCreditToRedeem returns the soonest-expiring reset credit that should be
+// spent now, if any.
+func (u *Usage) ResetCreditToRedeem(now time.Time) (ResetCredit, bool) {
+	if u.ResetCredits == nil {
+		return ResetCredit{}, false
+	}
+	var target ResetCredit
+	found := false
+	for _, c := range u.ResetCredits.Credits {
+		if !c.Redeemable(now) {
+			continue
+		}
+		if !found || c.ExpiresAt.Before(target.ExpiresAt) {
+			target, found = c, true
+		}
+	}
+	if !found {
+		return ResetCredit{}, false
+	}
+	remaining := target.ExpiresAt.Sub(now)
+	if remaining <= redeemLastChance || (remaining <= redeemExpirySoon && u.worthReclaiming()) {
+		return target, true
+	}
+	return ResetCredit{}, false
+}
+
+// worthReclaiming reports whether either window has consumed enough that a
+// reset would actually give something back.
+func (u *Usage) worthReclaiming() bool {
+	return u.FiveHour.UsedPercent >= redeemUsedPercentMin || u.Weekly.UsedPercent >= redeemUsedPercentMin
 }
 
 // CreditsUsable reports whether credits can cover a request when the weekly

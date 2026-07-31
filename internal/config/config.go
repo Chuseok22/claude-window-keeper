@@ -41,6 +41,9 @@ type ProviderConfig struct {
 	// (`limitping continue <provider>`) when the 5h limit recovers.
 	// Empty falls back to "continue".
 	ContinuePrompt string `toml:"continue_prompt"`
+	// AutoRedeem lets `watch` and `continue` spend a banked reset credit that is
+	// about to lapse. Codex-only, and off by default: redeeming is irreversible.
+	AutoRedeem bool `toml:"auto_redeem"`
 }
 
 // Config is the full configuration.
@@ -214,6 +217,10 @@ extra_args = []
 align_start = ""
 # Message injected to resume a proxied session when the 5h limit recovers.
 continue_prompt = "continue"
+# Let watch/continue spend a banked reset credit that is about to lapse (within
+# 24h with usage to reclaim, or in its final hour). Redeeming is irreversible;
+# "limitping redeem" does it manually. See "limitping help redeem".
+auto_redeem = false
 
 [spark]
 # Spark is a separate watch target backed by the Codex CLI and credentials.

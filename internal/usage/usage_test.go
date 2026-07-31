@@ -97,3 +97,56 @@ func TestWeeklyExhausted(t *testing.T) {
 		}
 	}
 }
+
+func TestResetCreditToRedeem(t *testing.T) {
+	now := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	credit := func(expiresIn time.Duration) ResetCredit {
+		return ResetCredit{Status: "available", ExpiresAt: now.Add(expiresIn)}
+	}
+	usageWith := func(weeklyPct float64, credits ...ResetCredit) *Usage {
+		return &Usage{
+			Weekly:       Window{UsedPercent: weeklyPct},
+			ResetCredits: &ResetCredits{AvailableCount: len(credits), Credits: credits},
+		}
+	}
+
+	cases := []struct {
+		name string
+		u    *Usage
+		want bool
+	}{
+		{"no credits at all", &Usage{}, false},
+		{"plenty of lifetime left", usageWith(90, credit(10*24*time.Hour)), false},
+		{"expiring soon but nothing to reclaim", usageWith(10, credit(6*time.Hour)), false},
+		{"expiring soon with usage to reclaim", usageWith(60, credit(6*time.Hour)), true},
+		{"last hour reclaims unconditionally", usageWith(1, credit(30*time.Minute)), true},
+		{"already expired", usageWith(90, credit(-time.Minute)), false},
+		{"already redeemed", usageWith(90, ResetCredit{
+			Status: "redeemed", ExpiresAt: now.Add(time.Minute), RedeemedAt: now.Add(-time.Hour),
+		}), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, got := tc.u.ResetCreditToRedeem(now); got != tc.want {
+				t.Fatalf("ResetCreditToRedeem() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResetCreditToRedeemPicksSoonestExpiring(t *testing.T) {
+	now := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	soonest := ResetCredit{Status: "available", ExpiresAt: now.Add(2 * time.Hour)}
+	u := &Usage{
+		Weekly: Window{UsedPercent: 80},
+		ResetCredits: &ResetCredits{Credits: []ResetCredit{
+			{Status: "available", ExpiresAt: now.Add(20 * time.Hour)},
+			soonest,
+			{Status: "expired", ExpiresAt: now.Add(-time.Hour)},
+		}},
+	}
+	got, ok := u.ResetCreditToRedeem(now)
+	if !ok || !got.ExpiresAt.Equal(soonest.ExpiresAt) {
+		t.Fatalf("ResetCreditToRedeem() = %v/%t, want the credit expiring at %v", got.ExpiresAt, ok, soonest.ExpiresAt)
+	}
+}

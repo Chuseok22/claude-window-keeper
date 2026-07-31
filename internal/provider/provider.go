@@ -62,6 +62,27 @@ type ActiveTaskDetector interface {
 	ActiveTask(ctx context.Context) (description string, active bool, err error)
 }
 
+// Backend outcomes of a reset-credit redemption.
+const (
+	RedeemReset           = "reset"            // a credit was spent and the eligible windows were reset
+	RedeemNothingToReset  = "nothing_to_reset" // no window is eligible; no credit was spent
+	RedeemNoCredit        = "no_credit"        // the account has no banked credits
+	RedeemAlreadyRedeemed = "already_redeemed" // this attempt already completed
+)
+
+// ResetCreditRedeemer is optionally implemented by providers that can spend a
+// banked rate-limit reset credit. Redeeming is irreversible, so it never
+// happens as a side effect of reading usage.
+type ResetCreditRedeemer interface {
+	// RedeemResetCredit spends the next available credit unconditionally and
+	// returns the backend's outcome.
+	RedeemResetCredit(ctx context.Context) (outcome string, err error)
+	// AutoRedeemResetCredit spends one only when u shows a credit about to
+	// lapse, returning an empty outcome when nothing was attempted. It is
+	// throttled internally, so a polling caller may call it every cycle.
+	AutoRedeemResetCredit(ctx context.Context, u *usage.Usage) (outcome string, err error)
+}
+
 // TriggerResult reports what a Trigger did, including the token usage the ping
 // consumed (parsed from the CLI's machine-readable output). CostUSD is 0 when
 // the provider doesn't report a cost (e.g. Codex).

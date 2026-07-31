@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -9,8 +10,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wavever/CCLimitPing/internal/config"
+	"github.com/wavever/CCLimitPing/internal/usage"
 )
 
 func TestCodexReadUsageSendsCompatibleHeaders(t *testing.T) {
@@ -377,5 +380,146 @@ func TestCodexInteractiveArgsDropsExecOnlyFlags(t *testing.T) {
 	want := []string{"--search", "-C", "/tmp/project"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("interactive args = %#v, want %#v", got, want)
+	}
+}
+
+func TestCodexRedeemResetCreditReportsOutcome(t *testing.T) {
+	var body []byte
+	useTransport(t, func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodPost || req.URL.String() != codexConsumeURL() {
+			t.Fatalf("consume request = %s %s", req.Method, req.URL)
+		}
+		if got := req.Header.Get("Content-Type"); got != "application/json" {
+			t.Fatalf("Content-Type = %q", got)
+		}
+		var err error
+		if body, err = io.ReadAll(req.Body); err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"code":"reset","windows_reset":["primary"]}`)),
+			Request:    req,
+		}, nil
+	})
+
+	got, err := NewCodex(config.ProviderConfig{}).RedeemResetCredit(context.Background())
+	if err != nil {
+		t.Fatalf("RedeemResetCredit: %v", err)
+	}
+	if got != RedeemReset {
+		t.Fatalf("outcome = %q, want %q", got, RedeemReset)
+	}
+	var sent map[string]string
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("request body is not JSON: %v (%s)", err, body)
+	}
+	if sent["idempotency_key"] == "" {
+		t.Fatalf("request body = %s, want an idempotency key", body)
+	}
+}
+
+func TestCodexRedeemResetCreditNormalizesCamelCaseOutcomes(t *testing.T) {
+	cases := map[string]string{
+		"nothingToReset":   RedeemNothingToReset,
+		"nothing_to_reset": RedeemNothingToReset,
+		"noCredit":         RedeemNoCredit,
+		"alreadyRedeemed":  RedeemAlreadyRedeemed,
+		"brand_new_code":   "brand_new_code",
+	}
+	for code, want := range cases {
+		t.Run(code, func(t *testing.T) {
+			useTransport(t, func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"code":"` + code + `"}`)),
+					Request:    req,
+				}, nil
+			})
+			got, err := NewCodex(config.ProviderConfig{}).RedeemResetCredit(context.Background())
+			if err != nil || got != want {
+				t.Fatalf("outcome = %q (err %v), want %q", got, err, want)
+			}
+		})
+	}
+}
+
+func TestCodexRedeemResetCreditRejectsOutcomelessResponse(t *testing.T) {
+	useTransport(t, func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
+			Request:    req,
+		}, nil
+	})
+	if _, err := NewCodex(config.ProviderConfig{}).RedeemResetCredit(context.Background()); err == nil {
+		t.Fatal("a response without an outcome must not be reported as a redemption")
+	}
+}
+
+func TestCodexAutoRedeemSkipsUntilExpiryAndThenThrottles(t *testing.T) {
+	requests := 0
+	useTransport(t, func(req *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"code":"nothing_to_reset"}`)),
+			Request:    req,
+		}, nil
+	})
+	c := NewCodex(config.ProviderConfig{})
+
+	fresh := &usage.Usage{ResetCredits: &usage.ResetCredits{Credits: []usage.ResetCredit{
+		{Status: "available", ExpiresAt: time.Now().Add(10 * 24 * time.Hour)},
+	}}}
+	if outcome, err := c.AutoRedeemResetCredit(context.Background(), fresh); outcome != "" || err != nil {
+		t.Fatalf("outcome = %q (err %v), want no attempt for a credit with 10 days left", outcome, err)
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d, want 0", requests)
+	}
+
+	expiring := &usage.Usage{ResetCredits: &usage.ResetCredits{Credits: []usage.ResetCredit{
+		{Status: "available", ExpiresAt: time.Now().Add(30 * time.Minute)},
+	}}}
+	if outcome, err := c.AutoRedeemResetCredit(context.Background(), expiring); outcome != RedeemNothingToReset || err != nil {
+		t.Fatalf("outcome = %q (err %v), want %q", outcome, err, RedeemNothingToReset)
+	}
+	// A 1-minute poll loop must not retry the refused redemption every cycle.
+	if outcome, err := c.AutoRedeemResetCredit(context.Background(), expiring); outcome != "" || err != nil {
+		t.Fatalf("outcome = %q (err %v), want the cooldown to suppress the retry", outcome, err)
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
+	}
+}
+
+func TestCreditIdempotencyKeyIsStablePerCredit(t *testing.T) {
+	expires := time.Now().Add(time.Hour)
+	first := creditIdempotencyKey(usage.ResetCredit{ExpiresAt: expires})
+	// Same credit read again (in another zone) must reuse the key, so a retry
+	// after a lost response cannot spend a second credit.
+	if second := creditIdempotencyKey(usage.ResetCredit{ExpiresAt: expires.In(time.UTC)}); second != first {
+		t.Fatalf("key = %q then %q, want them equal", first, second)
+	}
+	if other := creditIdempotencyKey(usage.ResetCredit{ExpiresAt: expires.Add(time.Minute)}); other == first {
+		t.Fatal("a different credit reused the same idempotency key")
+	}
+	if randomIdempotencyKey() == randomIdempotencyKey() {
+		t.Fatal("manual redemptions must not share an idempotency key")
+	}
+}
+
+func TestCodexConsumeURLFromBase(t *testing.T) {
+	cases := map[string]string{
+		"":                                    codexDefaultBaseURL + codexConsumePath,
+		"https://chatgpt.com/backend-api":     "https://chatgpt.com/backend-api" + codexConsumePath,
+		"https://proxy.internal/backend-api/": "https://proxy.internal/backend-api" + codexConsumePath,
+		"https://api.openai.com/v1":           codexDefaultBaseURL + codexConsumePath,
+	}
+	for base, want := range cases {
+		if got := codexResetURLFromBase(base, codexConsumePath); got != want {
+			t.Fatalf("codexResetURLFromBase(%q) = %q, want %q", base, got, want)
+		}
 	}
 }

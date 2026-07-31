@@ -32,7 +32,7 @@ func newRootCmd() *cobra.Command {
 	if text.usageTemplate != "" {
 		root.SetUsageTemplate(text.usageTemplate)
 	}
-	root.AddCommand(newStatusCmd(), newPingCmd(), newWatchCmd(), newScheduleCmd(), newContinueCmd(), newBackgroundCmd(), newConfigCmd(), newHooksCmd(), newHookCmd(), newUpgradeCmd(), newUninstallCmd(), newVersionCmd())
+	root.AddCommand(newStatusCmd(), newPingCmd(), newWatchCmd(), newScheduleCmd(), newContinueCmd(), newRedeemCmd(), newBackgroundCmd(), newConfigCmd(), newHooksCmd(), newHookCmd(), newUpgradeCmd(), newUninstallCmd(), newVersionCmd())
 	localizeCompletionCommand(root, text)
 	root.SetHelpCommand(newHelpCommand(text))
 	localizeHelpFlags(root, text)
@@ -162,24 +162,25 @@ func selectProviders(cfg config.Config, name string) ([]provider.Provider, error
 	return []provider.Provider{p}, nil
 }
 
-// makeTarget pairs a provider with its parsed align_start anchor.
-func makeTarget(p provider.Provider, alignStart string) (scheduler.Target, error) {
+// makeTarget pairs a provider with the scheduling options from its config
+// section.
+func makeTarget(p provider.Provider, pc config.ProviderConfig) (scheduler.Target, error) {
 	var anchor time.Time
-	if alignStart != "" {
-		t, err := time.Parse(time.RFC3339, alignStart)
+	if pc.AlignStart != "" {
+		t, err := time.Parse(time.RFC3339, pc.AlignStart)
 		if err != nil {
 			return scheduler.Target{}, fmt.Errorf("%s align_start: %w", p.Name(), err)
 		}
 		anchor = t
 	}
-	return scheduler.Target{Provider: p, AlignStart: anchor}, nil
+	return scheduler.Target{Provider: p, AlignStart: anchor, AutoRedeem: pc.AutoRedeem}, nil
 }
 
 // buildTargets builds scheduler targets for all enabled providers.
 func buildTargets(cfg config.Config) ([]scheduler.Target, error) {
 	var targets []scheduler.Target
-	add := func(p provider.Provider, alignStart string) error {
-		t, err := makeTarget(p, alignStart)
+	add := func(p provider.Provider, pc config.ProviderConfig) error {
+		t, err := makeTarget(p, pc)
 		if err != nil {
 			return err
 		}
@@ -187,17 +188,17 @@ func buildTargets(cfg config.Config) ([]scheduler.Target, error) {
 		return nil
 	}
 	if cfg.Claude.Enabled {
-		if err := add(provider.NewClaude(cfg.Claude), cfg.Claude.AlignStart); err != nil {
+		if err := add(provider.NewClaude(cfg.Claude), cfg.Claude); err != nil {
 			return nil, err
 		}
 	}
 	if cfg.Codex.Enabled {
-		if err := add(provider.NewCodex(cfg.Codex), cfg.Codex.AlignStart); err != nil {
+		if err := add(provider.NewCodex(cfg.Codex), cfg.Codex); err != nil {
 			return nil, err
 		}
 	}
 	if cfg.Spark.Enabled {
-		if err := add(provider.NewSpark(cfg.Spark), cfg.Spark.AlignStart); err != nil {
+		if err := add(provider.NewSpark(cfg.Spark), cfg.Spark); err != nil {
 			return nil, err
 		}
 	}
@@ -218,22 +219,22 @@ func selectTargets(cfg config.Config, name string) ([]scheduler.Target, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, err := makeTarget(p, providerAlignStart(cfg, name))
+	t, err := makeTarget(p, providerConfig(cfg, name))
 	if err != nil {
 		return nil, err
 	}
 	return []scheduler.Target{t}, nil
 }
 
-// providerAlignStart returns the configured align_start for a provider name.
-func providerAlignStart(cfg config.Config, name string) string {
+// providerConfig returns the config section for a provider name.
+func providerConfig(cfg config.Config, name string) config.ProviderConfig {
 	switch name {
 	case "claude":
-		return cfg.Claude.AlignStart
+		return cfg.Claude
 	case "codex":
-		return cfg.Codex.AlignStart
+		return cfg.Codex
 	case "spark":
-		return cfg.Spark.AlignStart
+		return cfg.Spark
 	}
-	return ""
+	return config.ProviderConfig{}
 }

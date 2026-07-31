@@ -85,6 +85,20 @@ type cliText struct {
 	continueBadProvider string
 	continueStartedFmt  string
 
+	// `redeem` reset-credit strings.
+	redeemShort         string
+	redeemLong          string
+	redeemDryRunFlag    string
+	redeemNoneAvailable string
+	redeemPlanFmt       string // expiry stamp, remaining lifetime
+	redeemDryRunNote    string
+	redeemOutcomeFmt    string // outcome sentence
+	redeemDone          string
+	redeemNothing       string
+	redeemNoCredit      string
+	redeemAlready       string
+	redeemUnknownFmt    string // raw outcome code
+
 	bgShort          string
 	bgLong           string
 	bgExample        string
@@ -314,6 +328,27 @@ Examples:
   limitping continue claude --dangerously-skip-permissions`,
 	continueBadProvider: "invalid provider (want claude or codex):",
 	continueStartedFmt:  "Proxying %s with auto-continue on 5h-limit recovery (message: %q). Use it as usual; quit from inside the CLI to exit.\n",
+
+	redeemShort: "Spend a banked Codex rate-limit reset credit now",
+	redeemLong: `Consume one of the Codex reset credits shown by 'limitping status', resetting the rate-limit windows it is eligible for.
+
+Redeeming is irreversible. The backend decides which credit to spend and refuses with "nothing to reset" when no window is currently eligible, so a credit is never burned for nothing.
+
+Set auto_redeem = true under [codex] in the config to let 'watch' and 'continue' spend a credit on their own once it is close to expiring (within 24h with real usage to reclaim, or in its final hour).
+
+Examples:
+  limitping redeem --dry-run
+  limitping redeem`,
+	redeemDryRunFlag:    "show which credit would be spent without consuming it",
+	redeemNoneAvailable: "no reset credits available to redeem",
+	redeemPlanFmt:       "codex   redeeming 1 reset credit (expires %s, in %s)\n",
+	redeemDryRunNote:    "dry run: nothing was consumed\n",
+	redeemOutcomeFmt:    "codex   %s\n",
+	redeemDone:          "redeemed — the eligible rate-limit windows were reset",
+	redeemNothing:       "no rate-limit window is currently eligible for a reset; the credit was not spent",
+	redeemNoCredit:      "the account has no reset credits available",
+	redeemAlready:       "this redemption already completed earlier",
+	redeemUnknownFmt:    "unexpected outcome from the backend: %s",
 
 	bgShort: "Run watch in the background — start | stop | status | logs",
 	bgLong: `Run the watch daemon detached from the terminal so it keeps pinging across 5h windows after you close the shell.
@@ -553,6 +588,27 @@ var zhText = cliText{
   limitping continue claude --dangerously-skip-permissions`,
 	continueBadProvider: "无效的 Provider（应为 claude 或 codex）：",
 	continueStartedFmt:  "正在代理 %s，5h 限额恢复后会自动续跑（消息：%q）。照常使用；退出请用该 CLI 自带的退出方式。\n",
+
+	redeemShort: "立即使用一张已到账的 Codex 限额重置卡",
+	redeemLong: `消耗一张 'limitping status' 中显示的 Codex 重置卡，重置它能覆盖的限额窗口。
+
+兑换不可撤销。由后端决定用哪一张；当前没有可重置的窗口时后端会以 "nothing to reset" 拒绝，因此不会白烧一张卡。
+
+在配置的 [codex] 下设置 auto_redeem = true，可让 'watch' 和 'continue' 在卡临近过期时自动使用（剩余有效期 24h 内且确实有用量可回收，或进入最后 1 小时）。
+
+示例:
+  limitping redeem --dry-run
+  limitping redeem`,
+	redeemDryRunFlag:    "只显示会用掉哪一张，不实际消耗",
+	redeemNoneAvailable: "没有可用的重置卡",
+	redeemPlanFmt:       "codex   即将使用 1 张重置卡（有效期至 %s，剩 %s）\n",
+	redeemDryRunNote:    "dry run: 未消耗任何重置卡\n",
+	redeemOutcomeFmt:    "codex   %s\n",
+	redeemDone:          "已兑换 —— 符合条件的限额窗口已重置",
+	redeemNothing:       "当前没有可重置的限额窗口，本次未消耗重置卡",
+	redeemNoCredit:      "账号没有可用的重置卡",
+	redeemAlready:       "这次兑换此前已经完成过",
+	redeemUnknownFmt:    "后端返回了未知结果: %s",
 
 	bgShort: "在后台运行 watch —— start | stop | status | logs",
 	bgLong: `以脱离终端的方式在后台运行 watch 守护进程，关闭终端后仍会在每个 5h 窗口重置时持续 ping。
