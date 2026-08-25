@@ -74,9 +74,9 @@ env:
   CONTAINER_NAME: ""
 
   # 🗂️ 볼륨 마운트 설정 (빈값이면 마운트 안함)
-  ENABLE_VOLUME_MOUNT: "false"
-  VOLUME_HOST_PATH: "/volume1/project/claude-window-keeper"
-  VOLUME_CONTAINER_PATH: "/mnt/claude-window-keeper"
+  ENABLE_VOLUME_MOUNT: "true"
+  VOLUME_HOST_PATH: "/volume1/project/claude-window-keeper/home"
+  VOLUME_CONTAINER_PATH: "/home/keeper"
 
   # 🔐 SSH 인증 방식: "password"(Synology·일반 서버) | "key"(AWS EC2·.pem)
   #   password → SERVER_PASSWORD secret 사용
@@ -93,10 +93,10 @@ env:
 
   # ⏱️ 헬스체크 설정
   HEALTHCHECK_WAIT_SECONDS: "10"  # 컨테이너 초기화 대기 시간 (초)
-  HEALTHCHECK_PATH: "/health"  # HTTP 엔드포인트 경로 (비어있으면 로그 패턴만 사용)
+  HEALTHCHECK_PATH: ""  # claude-window-keeper has no HTTP server — log-pattern check only
   HEALTHCHECK_MAX_RETRIES: "5"  # HTTP 재시도 횟수
   HEALTHCHECK_RETRY_INTERVAL: "3"  # 재시도 간격 (초)
-  HEALTHCHECK_LOG_PATTERN: "listening on"  # Fallback 로그 검색 패턴 (프로젝트 로그 문구에 맞게 조정)
+  HEALTHCHECK_LOG_PATTERN: "watching"  # matches scheduler.go's startup log: "watching [claude codex spark] (...)"
 
 jobs:
   # ===================================================================
