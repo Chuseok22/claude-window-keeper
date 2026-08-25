@@ -20,3 +20,12 @@ config.toml
 .DS_Store
 .idea/
 .vscode/
+
+docs/
+.docs/
+issue/
+.issue/
+report/
+.report/
+superpowers/
+.superpowers/
