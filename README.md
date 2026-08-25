@@ -47,6 +47,15 @@ scp ~/.claude/.credentials.json  <nas-user>@<nas-host>:/volume1/project/claude-w
 scp ~/.codex/auth.json           <nas-user>@<nas-host>:/volume1/project/claude-window-keeper/home/.codex/auth.json
 ```
 
+The container runs as an unprivileged user (`keeper`, UID 1001), not root — but the deploy workflow creates that
+host directory with `sudo mkdir -p`, and the `scp` above lands the files as your NAS login user, so both end up
+root-owned (or owned by whoever you SSH'd in as). Fix the ownership after copying the files in, or the container
+won't be able to read or write its own credentials:
+
+```sh
+sudo chown -R 1001:1001 /volume1/project/claude-window-keeper/home
+```
+
 Telegram alerting (sent once if a provider's OAuth refresh token is ever rejected outright) is configured via the
 `ENV_FILE` GitHub Secret — set `TELEGRAM_BOT_TOKEN=...` / `TELEGRAM_CHAT_ID=...` there, not in a local config file.
 
