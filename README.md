@@ -10,10 +10,11 @@
 ![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Linux%2Famd64%20(Docker)-lightgrey)
 
-Claude Code / Codex / Spark 구독의 5시간 rate-limit window를, 리셋되는 즉시 다시 이어붙여주는 개인용 NAS 데몬입니다.
+A personal NAS daemon that re-stitches your Claude Code / Codex / Spark subscription's 5-hour rate-limit window
+back together the moment it resets.
 
-[wavever/CCLimitPing](https://github.com/wavever/CCLimitPing)의 fork입니다 — 자세한 관계는
-[ATTRIBUTION.md](ATTRIBUTION.md) 참고. Synology NAS에서 Docker 컨테이너 하나로만 동작하도록 범위를 좁혔습니다.
+A fork of [wavever/CCLimitPing](https://github.com/wavever/CCLimitPing) — see [ATTRIBUTION.md](ATTRIBUTION.md)
+for the full relationship. Scope has been narrowed to run as a single Docker container on a Synology NAS.
 
 ## Highlights
 
