@@ -5,7 +5,7 @@
 # claude-window-keeper
 
 <!-- AUTO-VERSION-SECTION: DO NOT EDIT MANUALLY -->
-## Latest Version : v0.9.0 (2026-08-25)
+## Latest Version : v0.10.0 (2026-08-25)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/Chuseok22/claude-window-keeper/actions/workflows/PROJECT-GO-CI.yaml/badge.svg)](https://github.com/Chuseok22/claude-window-keeper/actions/workflows/PROJECT-GO-CI.yaml)
