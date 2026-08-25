@@ -343,6 +343,37 @@ func TestRunTargetBacksOffOnTriggerFailure(t *testing.T) {
 	}
 }
 
+// TestRunTarget_VerifiesWindowAfterTrigger_RetriesWhenNotActive proves that a
+// Trigger() that returns err == nil is not trusted on its own: the loop
+// re-reads usage after the post-ping grace period, and if the window still
+// isn't active it retries Trigger with the normal backoff instead of sleeping
+// for a full (never-verified) window length.
+//
+// The stub's Trigger never mutates p.usage, so this "window free" snapshot
+// stays inactive across every ReadUsage call — exactly modeling a Trigger
+// that exits cleanly without actually starting a window.
+func TestRunTarget_VerifiesWindowAfterTrigger_RetriesWhenNotActive(t *testing.T) {
+	p := &stubProvider{
+		usage: &usage.Usage{FiveHour: usage.Window{WindowSeconds: 18000}},
+	}
+	stop := runStub(t, Target{Provider: p})
+	defer stop()
+
+	waitFor(t, 500*time.Millisecond, func() bool {
+		_, triggers := p.counts()
+		return triggers == 1
+	})
+
+	// Old behavior would trust the first Trigger() and sleep until
+	// lastPingAt + windowLen(FiveHour) (5h here) before ever checking again.
+	// The bound below (postPingGrace + minBackoff, plus margin) is well under
+	// that, so this only passes if the loop actively retried Trigger.
+	waitFor(t, postPingGrace+minBackoff+10*time.Second, func() bool {
+		_, triggers := p.counts()
+		return triggers >= 2
+	})
+}
+
 func TestNextBackoff(t *testing.T) {
 	if got := nextBackoff(minBackoff); got != time.Minute {
 		t.Fatalf("nextBackoff(30s) = %v, want 1m", got)

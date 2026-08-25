@@ -265,12 +265,28 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 			continue
 		}
 		lastPingAt = time.Now()
-		s.log.Printf("[%s] ping sent, new window started%s", name, triggerCost(res))
-		s.live.set(name, "ping sent — checking window soon", lastPingAt.Add(postPingGrace))
+		s.log.Printf("[%s] ping sent, verifying window started%s", name, triggerCost(res))
+		s.live.set(name, "ping sent — verifying window…", lastPingAt.Add(postPingGrace))
 
 		if !sleepCtx(ctx, postPingGrace) {
 			return
 		}
+
+		vctx, vcancel := context.WithTimeout(ctx, readTimeout)
+		vu, verr := t.Provider.ReadUsage(vctx)
+		vcancel()
+		if verr != nil || !vu.FiveHour.Active() {
+			lastPingAt = time.Time{} // unverified — don't block the next attempt for a full window
+			s.log.Printf("[%s] ping verification failed: window not active after ping (retry in %s)", name, backoff)
+			s.live.set(name, "ping unverified — retrying", time.Now().Add(backoff))
+			if !sleepCtx(ctx, backoff) {
+				return
+			}
+			backoff = nextBackoff(backoff)
+			continue
+		}
+		backoff = minBackoff
+		s.log.Printf("[%s] window verified active", name)
 	}
 }
 
