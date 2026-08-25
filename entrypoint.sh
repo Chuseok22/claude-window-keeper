@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ -f /app/.env ]; then
+  set -a
+  . /app/.env
+  set +a
+fi
+exec /usr/local/bin/claude-window-keeper "$@"
