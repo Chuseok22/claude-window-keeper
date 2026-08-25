@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wavever/CCLimitPing/internal/usage"
+	"github.com/Chuseok22/claude-window-keeper/internal/usage"
 )
 
 const (

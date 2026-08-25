@@ -99,13 +99,13 @@ func Default() Config {
 // falling back to ~/.config/limitping.
 func Dir() (string, error) {
 	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
-		return filepath.Join(x, "limitping"), nil
+		return filepath.Join(x, "claude-window-keeper"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "limitping"), nil
+	return filepath.Join(home, ".config", "claude-window-keeper"), nil
 }
 
 // Path returns the absolute path of the config file.

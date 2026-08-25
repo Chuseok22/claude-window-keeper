@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wavever/CCLimitPing/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
 )
 
 func newConfigCmd() *cobra.Command {

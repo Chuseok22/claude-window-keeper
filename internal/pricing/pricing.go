@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wavever/CCLimitPing/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
 )
 
 // litellmURL is the canonical pricing dataset ccusage/CodexBar pull from.

@@ -16,9 +16,9 @@ import (
 
 	"github.com/creack/pty"
 
-	"github.com/wavever/CCLimitPing/internal/auth"
-	"github.com/wavever/CCLimitPing/internal/config"
-	"github.com/wavever/CCLimitPing/internal/usage"
+	"github.com/Chuseok22/claude-window-keeper/internal/auth"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/usage"
 )
 
 const (

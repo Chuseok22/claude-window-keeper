@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/wavever/CCLimitPing/internal/cli"
+	"github.com/Chuseok22/claude-window-keeper/internal/cli"
 )
 
 func main() {

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/wavever/CCLimitPing/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
 )
 
 const watchLockName = "watch.lock"

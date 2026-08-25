@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wavever/CCLimitPing/internal/config"
-	"github.com/wavever/CCLimitPing/internal/usage"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/usage"
 )
 
 // fakeCodexHome points CODEX_HOME at a temp dir holding credentials, so a test

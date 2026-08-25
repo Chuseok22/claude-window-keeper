@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wavever/CCLimitPing/internal/config"
-	"github.com/wavever/CCLimitPing/internal/provider"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/provider"
 )
 
 func newPingCmd() *cobra.Command {

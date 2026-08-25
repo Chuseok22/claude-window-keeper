@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wavever/CCLimitPing/internal/config"
-	"github.com/wavever/CCLimitPing/internal/provider"
-	"github.com/wavever/CCLimitPing/internal/usage"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/provider"
+	"github.com/Chuseok22/claude-window-keeper/internal/usage"
 )
 
 type stubProvider struct {

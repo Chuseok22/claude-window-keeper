@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wavever/CCLimitPing/internal/config"
-	"github.com/wavever/CCLimitPing/internal/provider"
-	"github.com/wavever/CCLimitPing/internal/scheduler"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/provider"
+	"github.com/Chuseok22/claude-window-keeper/internal/scheduler"
 )
 
 // Version is the binary version, overridable at build time via -ldflags.
@@ -23,7 +23,7 @@ func Execute() error {
 func newRootCmd() *cobra.Command {
 	text := localizedText()
 	root := &cobra.Command{
-		Use:           "limitping",
+		Use:           "claude-window-keeper",
 		Short:         text.rootShort,
 		Long:          text.rootLong,
 		SilenceUsage:  true,
@@ -110,7 +110,7 @@ func newVersionCmd() *cobra.Command {
 		Short:   text.versionShort,
 		Args:    cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			fmt.Fprintf(cmd.OutOrStdout(), "limitping %s\n", Version)
+			fmt.Fprintf(cmd.OutOrStdout(), "claude-window-keeper %s\n", Version)
 		},
 	}
 }

@@ -14,7 +14,7 @@ func useTempConfigDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	return filepath.Join(dir, "limitping", "config.toml")
+	return filepath.Join(dir, "claude-window-keeper", "config.toml")
 }
 
 func writeConfig(t *testing.T, path, contents string) {

@@ -1,4 +1,4 @@
-module github.com/wavever/CCLimitPing
+module github.com/Chuseok22/claude-window-keeper
 
 go 1.25.6
 

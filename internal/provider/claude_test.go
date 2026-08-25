@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wavever/CCLimitPing/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
 )
 
 func TestClaudeInteractiveArgsDropsPrintOnlyFlags(t *testing.T) {

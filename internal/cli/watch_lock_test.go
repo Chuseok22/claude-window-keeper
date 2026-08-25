@@ -36,7 +36,7 @@ func TestAcquireWatchLockPreventsSecondWatcher(t *testing.T) {
 func TestAcquireWatchLockClearsStaleLock(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	lockDir := filepath.Join(dir, "limitping")
+	lockDir := filepath.Join(dir, "claude-window-keeper")
 	if err := os.MkdirAll(lockDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

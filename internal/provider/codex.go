@@ -22,9 +22,9 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/creack/pty"
 
-	"github.com/wavever/CCLimitPing/internal/auth"
-	"github.com/wavever/CCLimitPing/internal/config"
-	"github.com/wavever/CCLimitPing/internal/usage"
+	"github.com/Chuseok22/claude-window-keeper/internal/auth"
+	"github.com/Chuseok22/claude-window-keeper/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/usage"
 )
 
 const (
@@ -33,7 +33,7 @@ const (
 	codexResetPath      = "/wham/rate-limit-reset-credits"
 	codexConsumePath    = "/wham/rate-limit-reset-credits/consume"
 	codexAPIPath        = "/api/codex/usage"
-	codexUserAgent      = "limitping"
+	codexUserAgent      = "claude-window-keeper"
 	sparkDefaultModel   = "gpt-5.3-codex-spark"
 
 	// codexRedeemCooldown throttles the automatic redemption path so a
