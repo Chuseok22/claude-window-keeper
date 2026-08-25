@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/Chuseok22/claude-window-keeper/internal/config"
+	"github.com/Chuseok22/claude-window-keeper/internal/notify"
 	"github.com/Chuseok22/claude-window-keeper/internal/provider"
 	"github.com/Chuseok22/claude-window-keeper/internal/usage"
 )
@@ -385,5 +388,134 @@ func TestTriggerCost(t *testing.T) {
 	want := " — 100 tok (in 90 / out 10), $0.0110"
 	if got := triggerCost(res); got != want {
 		t.Fatalf("triggerCost = %q, want %q", got, want)
+	}
+}
+
+// countingTransport is an http.RoundTripper that counts requests and answers
+// them locally with a 200 OK, so tests can observe how many times
+// notify.Notify actually attempted to send a Telegram message without any
+// real network access and without needing a cross-package test seam into
+// internal/notify (whose telegramBaseURL swap helper is unexported).
+type countingTransport struct {
+	mu    sync.Mutex
+	count int
+}
+
+func (rt *countingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	rt.mu.Lock()
+	rt.count++
+	rt.mu.Unlock()
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("")),
+		Header:     make(http.Header),
+	}, nil
+}
+
+func (rt *countingTransport) Count() int {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	return rt.count
+}
+
+// swapDefaultHTTPClientForTest points the process-wide http.DefaultClient
+// (which notify.Notify sends through) at rt for the duration of the test.
+func swapDefaultHTTPClientForTest(t *testing.T) *countingTransport {
+	t.Helper()
+	rt := &countingTransport{}
+	orig := http.DefaultClient
+	http.DefaultClient = &http.Client{Transport: rt}
+	t.Cleanup(func() { http.DefaultClient = orig })
+	return rt
+}
+
+func TestNotifyAuthExpired_OncePerEpisode_ThenResetOnSuccess(t *testing.T) {
+	rt := swapDefaultHTTPClientForTest(t)
+	s := &Scheduler{
+		notifyCfg:    notify.Config{BotToken: "t", ChatID: "c"},
+		authNotified: make(map[string]bool),
+	}
+	authErr := &provider.AuthExpiredError{Err: errors.New("refresh rejected")}
+
+	// Repeated failures within the same episode must notify exactly once.
+	s.notifyAuthExpired("claude", authErr)
+	s.notifyAuthExpired("claude", authErr)
+	s.notifyAuthExpired("claude", authErr)
+	if got := rt.Count(); got != 1 {
+		t.Fatalf("notify calls during one episode = %d, want 1", got)
+	}
+	if !s.authNotified["claude"] {
+		t.Fatal("authNotified should be true after a notified auth failure")
+	}
+
+	// A successful ReadUsage resets the flag — mirrors the
+	// `s.authNotified[name] = false` line runTarget executes on its success
+	// path.
+	s.authNotified["claude"] = false
+
+	// A new episode of failures must notify again, exactly once more.
+	s.notifyAuthExpired("claude", authErr)
+	s.notifyAuthExpired("claude", authErr)
+	if got := rt.Count(); got != 2 {
+		t.Fatalf("notify calls after reset = %d, want 2 (one more, for the new episode)", got)
+	}
+}
+
+func TestRunTarget_AuthExpiredError_TriggersNotifyExactlyOnce(t *testing.T) {
+	rt := swapDefaultHTTPClientForTest(t)
+	p := &stubProvider{readErr: &provider.AuthExpiredError{Err: errors.New("refresh rejected")}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
+	s.notifyCfg = notify.Config{BotToken: "t", ChatID: "c"} // enable notify; env is unset in test runs
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.runTarget(ctx, s.targets[0])
+	}()
+
+	waitFor(t, 500*time.Millisecond, func() bool { return rt.Count() >= 1 })
+	time.Sleep(50 * time.Millisecond)
+	if got := rt.Count(); got != 1 {
+		t.Fatalf("notify calls = %d, want exactly 1", got)
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("runTarget did not stop after cancellation")
+	}
+}
+
+func TestRunTarget_GenericReadError_DoesNotTriggerNotify(t *testing.T) {
+	rt := swapDefaultHTTPClientForTest(t)
+	p := &stubProvider{readErr: errors.New("connection reset")}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
+	s.notifyCfg = notify.Config{BotToken: "t", ChatID: "c"} // enable notify; env is unset in test runs
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.runTarget(ctx, s.targets[0])
+	}()
+
+	waitFor(t, 500*time.Millisecond, func() bool {
+		reads, _ := p.counts()
+		return reads >= 1
+	})
+	time.Sleep(50 * time.Millisecond)
+	if got := rt.Count(); got != 0 {
+		t.Fatalf("notify calls for a generic (non-auth-expired) read error = %d, want 0 — errors.As must not match AuthExpiredError", got)
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("runTarget did not stop after cancellation")
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -41,11 +42,13 @@ type Target struct {
 
 // Scheduler drives the watch loops.
 type Scheduler struct {
-	cfg     config.Config
-	targets []Target
-	dryRun  bool
-	log     *log.Logger
-	live    *liveStatus
+	cfg          config.Config
+	targets      []Target
+	dryRun       bool
+	log          *log.Logger
+	live         *liveStatus
+	notifyCfg    notify.Config
+	authNotified map[string]bool
 }
 
 // New builds a scheduler that logs to out. When live is true and out is an
@@ -58,11 +61,13 @@ func New(cfg config.Config, targets []Target, dryRun, live bool, out io.Writer) 
 	}
 	status := newLiveStatus(out, names, live)
 	return &Scheduler{
-		cfg:     cfg,
-		targets: targets,
-		dryRun:  dryRun,
-		log:     log.New(status, "", log.LstdFlags),
-		live:    status,
+		cfg:          cfg,
+		targets:      targets,
+		dryRun:       dryRun,
+		log:          log.New(status, "", log.LstdFlags),
+		live:         status,
+		notifyCfg:    notify.Config{BotToken: os.Getenv("TELEGRAM_BOT_TOKEN"), ChatID: os.Getenv("TELEGRAM_CHAT_ID")},
+		authNotified: make(map[string]bool),
 	}
 }
 
@@ -125,6 +130,10 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 				backoff = minBackoff
 				continue
 			}
+			var authErr *provider.AuthExpiredError
+			if errors.As(err, &authErr) {
+				s.notifyAuthExpired(name, authErr)
+			}
 			s.log.Printf("[%s] read usage failed: %v (retry in %s)", name, err, backoff)
 			s.live.set(name, "read failed — retrying", time.Now().Add(backoff))
 			if !sleepCtx(ctx, backoff) {
@@ -134,6 +143,7 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 			continue
 		}
 		backoff = minBackoff
+		s.authNotified[name] = false
 
 		// A spent credit resets the windows, so this snapshot is stale; re-read
 		// before deciding anything from it.
@@ -151,7 +161,6 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 			s.log.Printf("[%s] weekly limit exhausted (%.0f%%); sleeping %s until weekly reset",
 				name, u.Weekly.UsedPercent, wait.Round(time.Second))
 			s.live.set(name, fmt.Sprintf("weekly limit reached (%.0f%%)", u.Weekly.UsedPercent), time.Now().Add(wait))
-			s.notify(name+": weekly limit reached", "Skipping pings until weekly reset")
 			if !sleepCtx(ctx, wait) {
 				return
 			}
@@ -249,7 +258,6 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 		if err != nil {
 			s.log.Printf("[%s] ping failed: %v (retry in %s)", name, err, backoff)
 			s.live.set(name, "ping failed — retrying", time.Now().Add(backoff))
-			s.notify(name+": ping failed", err.Error())
 			if !sleepCtx(ctx, backoff) {
 				return
 			}
@@ -259,7 +267,6 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 		lastPingAt = time.Now()
 		s.log.Printf("[%s] ping sent, new window started%s", name, triggerCost(res))
 		s.live.set(name, "ping sent — checking window soon", lastPingAt.Add(postPingGrace))
-		s.notify(name+": window started", "New 5h window"+triggerCost(res))
 
 		if !sleepCtx(ctx, postPingGrace) {
 			return
@@ -288,7 +295,6 @@ func (s *Scheduler) redeemExpiringCredit(ctx context.Context, t Target, u *usage
 		s.log.Printf("[%s] reset credit redeem failed: %v", name, err)
 	case outcome == provider.RedeemReset:
 		s.log.Printf("[%s] redeemed an expiring reset credit; rate-limit windows reset", name)
-		s.notify(name+": reset credit redeemed", "An expiring reset credit was spent; the windows are reset")
 		return true
 	case outcome != "":
 		s.log.Printf("[%s] reset credit not spent: %s", name, outcome)
@@ -296,12 +302,16 @@ func (s *Scheduler) redeemExpiringCredit(ctx context.Context, t Target, u *usage
 	return false
 }
 
-// notify is currently always a no-op: internal/notify's Telegram credentials
-// come from environment variables wired up by a later task, not
-// config.Config. It compiles against the new notify.Notify signature so this
-// package keeps building in the interim.
-func (s *Scheduler) notify(title, msg string) {
-	notify.Notify(notify.Config{}, title, msg)
+// notifyAuthExpired sends a Telegram alert the first time name's refresh
+// token is seen to be definitively rejected, then stays silent until a
+// successful ReadUsage resets the flag (see runTarget).
+func (s *Scheduler) notifyAuthExpired(name string, err error) {
+	if s.authNotified[name] {
+		return
+	}
+	s.authNotified[name] = true
+	notify.Notify(s.notifyCfg, name+": 인증이 만료됐습니다 — 다시 로그인해 주세요",
+		"자격증명 파일을 갱신할 때까지 재시도만 계속합니다.\n"+err.Error())
 }
 
 // triggerCost renders the token/cost tail for logs, e.g.
