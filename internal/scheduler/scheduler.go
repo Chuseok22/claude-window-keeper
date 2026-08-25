@@ -72,8 +72,8 @@ func (s *Scheduler) Run(ctx context.Context) {
 	for i, t := range s.targets {
 		names[i] = t.Provider.Name()
 	}
-	s.log.Printf("watching %v (weekly_threshold=%.2f, reset_buffer=%s, notify=%t, dry_run=%t)",
-		names, s.cfg.WeeklyThreshold, s.cfg.ResetBuffer.Duration, s.cfg.Notify, s.dryRun)
+	s.log.Printf("watching %v (weekly_threshold=%.2f, reset_buffer=%s, dry_run=%t)",
+		names, s.cfg.WeeklyThreshold, s.cfg.ResetBuffer.Duration, s.dryRun)
 
 	var liveWG sync.WaitGroup
 	if s.live.enabled {
@@ -296,10 +296,12 @@ func (s *Scheduler) redeemExpiringCredit(ctx context.Context, t Target, u *usage
 	return false
 }
 
+// notify is currently always a no-op: internal/notify's Telegram credentials
+// come from environment variables wired up by a later task, not
+// config.Config. It compiles against the new notify.Notify signature so this
+// package keeps building in the interim.
 func (s *Scheduler) notify(title, msg string) {
-	if s.cfg.Notify {
-		notify.Notify(title, msg)
-	}
+	notify.Notify(notify.Config{}, title, msg)
 }
 
 // triggerCost renders the token/cost tail for logs, e.g.

@@ -52,7 +52,6 @@ func (p *stubProvider) counts() (reads, triggers int) {
 
 func testConfig() config.Config {
 	cfg := config.Default()
-	cfg.Notify = false
 	cfg.ResetBuffer = config.Duration{}
 	return cfg
 }

@@ -54,8 +54,6 @@ type Config struct {
 	// ResetBuffer: wait this long after a window's reset time before pinging,
 	// to be sure the window has actually rolled over.
 	ResetBuffer Duration `toml:"reset_buffer"`
-	// Notify: emit macOS notifications on ping success/failure/skip.
-	Notify bool `toml:"notify"`
 	// UsageDisplay controls the text status percentage: "used" preserves the raw
 	// provider usage value; "remaining" shows the complement users see in some UIs.
 	UsageDisplay string `toml:"usage_display"`
@@ -70,7 +68,6 @@ func Default() Config {
 	return Config{
 		WeeklyThreshold: 0.99,
 		ResetBuffer:     Duration{10 * time.Second},
-		Notify:          true,
 		UsageDisplay:    "used",
 		Claude: ProviderConfig{
 			Enabled:        true,
@@ -182,9 +179,6 @@ weekly_threshold = 0.99
 
 # Wait this long after a window's reset before pinging (ensures rollover).
 reset_buffer = "10s"
-
-# Emit macOS notifications on ping success/failure/skip.
-notify = true
 
 # Text status percentage: "used" or "remaining".
 usage_display = "used"

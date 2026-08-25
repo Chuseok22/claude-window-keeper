@@ -36,7 +36,7 @@ func TestLoadReturnsDefaultsWithoutFile(t *testing.T) {
 	}
 	def := Default()
 	if cfg.WeeklyThreshold != def.WeeklyThreshold || cfg.UsageDisplay != def.UsageDisplay ||
-		cfg.ResetBuffer.Duration != def.ResetBuffer.Duration || cfg.Notify != def.Notify {
+		cfg.ResetBuffer.Duration != def.ResetBuffer.Duration {
 		t.Fatalf("Load() = %+v, want defaults %+v", cfg, def)
 	}
 	if !cfg.Claude.Enabled || !cfg.Codex.Enabled || cfg.Spark.Enabled {
