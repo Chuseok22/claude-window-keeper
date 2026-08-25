@@ -1,7 +1,7 @@
 # build output
 /bin/
 /dist/
-/limitping
+/claude-window-keeper
 *.out
 coverage.out
 *.test

@@ -1,0 +1,92 @@
+<p align="center">
+  <img src="assets/icon.png" alt="claude-window-keeper icon" width="160">
+</p>
+
+# claude-window-keeper
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/Chuseok22/claude-window-keeper/actions/workflows/PROJECT-GO-CI.yaml/badge.svg)](https://github.com/Chuseok22/claude-window-keeper/actions/workflows/PROJECT-GO-CI.yaml)
+[![Release](https://img.shields.io/github/v/release/Chuseok22/claude-window-keeper?include_prereleases&sort=semver)](https://github.com/Chuseok22/claude-window-keeper/releases)
+![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Linux%2Famd64%20(Docker)-lightgrey)
+
+Claude Code / Codex / Spark 구독의 5시간 rate-limit window를, 리셋되는 즉시 다시 이어붙여주는 개인용 NAS 데몬입니다.
+
+[wavever/CCLimitPing](https://github.com/wavever/CCLimitPing)의 fork입니다 — 자세한 관계는
+[ATTRIBUTION.md](ATTRIBUTION.md) 참고. Synology NAS에서 Docker 컨테이너 하나로만 동작하도록 범위를 좁혔습니다.
+
+## Highlights
+
+- **Keeps windows back-to-back.** Watches each enabled provider's 5-hour rate-limit window and fires a minimal
+  ping the moment it resets, so a new window starts as soon as possible instead of sitting idle until you
+  happen to use the CLI again.
+- **Read-only usage checks.** Polling a provider's usage endpoint to see where a window stands consumes no
+  quota — only the deliberate trigger ping does.
+- **Triggers through the official CLIs.** No private/undocumented request shapes for the actual "start a
+  session" step — it shells out to the same `claude` / `codex` binaries you'd run by hand.
+- **One alert, for one failure mode.** A Telegram message is sent only when a provider's OAuth refresh token is
+  outright rejected — i.e. you need to log back in on that provider. Everything else (rate limits, transient
+  network errors) is handled silently by the retry/backoff logic in the watch loop.
+- **Three independent providers.** `claude` and `codex` are enabled by default; `spark` (a second Codex-backed
+  target) is off by default so it doesn't add another quota-consuming ping until you opt in.
+
+## How it deploys
+
+Every push to `main` runs through GitHub Actions automatically: build/test/lint, then a version bump + GitHub
+Release, then a Docker image build pushed to DockerHub and deployed to the NAS over SSH — see
+`.github/workflows/PROJECT-GO-CI.yaml`, `PROJECT-COMMON-RELEASE-PUBLISH.yaml`, and `PROJECT-GO-SIMPLE-CICD.yaml`.
+There's no manual `docker build`/`docker run` step for a normal release.
+
+One thing the pipeline doesn't do for you: claude-window-keeper reuses whatever OAuth credentials Claude Code /
+Codex already produced on another machine, and those never go through git or CI. Before the first deploy, copy
+them onto the NAS host by hand, under the path the deploy workflow mounts as the container's `$HOME`:
+
+```sh
+scp ~/.claude/.credentials.json  <nas-user>@<nas-host>:/volume1/project/claude-window-keeper/home/.claude/.credentials.json
+scp ~/.codex/auth.json           <nas-user>@<nas-host>:/volume1/project/claude-window-keeper/home/.codex/auth.json
+```
+
+Telegram alerting (sent once if a provider's OAuth refresh token is ever rejected outright) is configured via the
+`ENV_FILE` GitHub Secret — set `TELEGRAM_BOT_TOKEN=...` / `TELEGRAM_CHAT_ID=...` there, not in a local config file.
+
+For local development, `docker build -t claude-window-keeper:local .` and `docker run --rm
+claude-window-keeper:local <command>` work without any of the above.
+
+## How it works
+
+1. **Watch loop.** `watch` starts one loop per enabled provider. Each loop reads the provider's current usage,
+   works out when the 5-hour window resets, sleeps until just after that (plus `reset_buffer` from config), then
+   sends a minimal trigger prompt so a new window opens right away. A weekly usage ceiling (`weekly_threshold`)
+   pauses pinging for a provider until its weekly window itself resets.
+2. **Usage reads.** Each provider implements a `ReadUsage` call against that provider's own OAuth-backed usage
+   endpoint — the same data your official client would show you, fetched read-only and consuming no quota.
+3. **Triggering.** `Trigger` shells out to the official CLI (`claude` or `codex`) through a PTY, sends the
+   configured minimal prompt, and parses the CLI's own output for token/cost usage where available.
+4. **Verification.** Right after a trigger, the scheduler re-reads usage to confirm the window actually rolled
+   over before going back to sleep, instead of trusting the trigger call blindly.
+5. **Auth failure alert.** If a provider's OAuth refresh token is rejected outright (not just rate-limited), the
+   watch loop sends one Telegram message via `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` and keeps looping — it
+   doesn't crash the daemon, and it doesn't re-alert every cycle for the same provider.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `claude-window-keeper status [-v] [--json]` | Prints each enabled provider's current window usage and time to reset. `-v`/`--verbose` adds detail; `--json` emits machine-readable output. |
+| `claude-window-keeper ping [provider] [--dry-run]` | Sends one trigger ping immediately (`claude`, `codex`, `spark`, or `all`, default `all`). `--dry-run` shows the command that would run without executing it. |
+| `claude-window-keeper watch [provider] [--dry-run] [--live]` | Runs the long-lived watch loop described above. `--live` draws a live status line on an interactive terminal; `--dry-run` logs what it would trigger without actually pinging. |
+| `claude-window-keeper redeem [--dry-run]` | Manually spends a banked Codex reset credit, if one is available and redeemable. Redeeming is irreversible, so this is always explicit — the automatic path is the opt-in `auto_redeem` config flag. |
+| `claude-window-keeper config init [--force]` / `config path` | Writes a commented default `config.toml` (refusing to overwrite unless `--force`), or prints the path it would use. |
+| `claude-window-keeper version` | Prints the binary version. |
+
+Run `claude-window-keeper help [command]` for a command's full flag list. The CLI's own text is Korean-only; this
+README stays in English so it's easier to diff against the upstream
+[wavever/CCLimitPing](https://github.com/wavever/CCLimitPing) project it was forked from.
+
+## Configuration
+
+Provider selection, prompts, models, and scheduling knobs (`weekly_threshold`, `reset_buffer`, `auto_redeem`, …)
+live in `config.toml` — see `claude-window-keeper config init` for a fully commented default, and
+`claude-window-keeper config path` for where it's read from. Telegram alerting is the one exception: it's read
+from the `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` environment variables only, never from `config.toml`, so it
+can be set as a deploy-time secret instead of a checked-in file.
