@@ -1,14 +1,6 @@
-//go:build !windows
-
 package cli
 
 import "syscall"
-
-// detachSysProcAttr puts the background watcher in its own session, detached from
-// the controlling terminal so it survives the launching shell closing.
-func detachSysProcAttr() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{Setsid: true}
-}
 
 // processAlive reports whether a process with the given pid is currently running.
 // Signal 0 does the kernel's existence/permission check without delivering a

@@ -169,14 +169,10 @@ func TestCodexRefreshFailures(t *testing.T) {
 
 // --- Claude ---
 
-// writeClaudeCreds disables the Keychain path and installs a credentials file
-// under a temp HOME, so tests never touch the real store on any OS.
+// writeClaudeCreds installs a credentials file under a temp HOME, so tests
+// never touch the real store.
 func writeClaudeCreds(t *testing.T, contents string) string {
 	t.Helper()
-	old := claudeKeychainEnabled
-	claudeKeychainEnabled = false
-	t.Cleanup(func() { claudeKeychainEnabled = old })
-
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	dir := filepath.Join(home, ".claude")

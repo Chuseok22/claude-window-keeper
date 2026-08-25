@@ -1,6 +1,6 @@
 // Package auth loads (and, when necessary, refreshes) the OAuth credentials
-// that Claude Code and Codex already store on disk / in the Keychain. We reuse
-// the official tools' credentials rather than managing our own login.
+// that Claude Code and Codex already store on disk. We reuse the official
+// tools' credentials rather than managing our own login.
 package auth
 
 import (
@@ -10,10 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -23,27 +20,19 @@ import (
 // CLI reads, keeping both in sync. If Anthropic changes this, update here.
 const claudeOAuthClientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
-const (
-	claudeKeychainService = "Claude Code-credentials"
-	claudeTokenEndpoint   = "https://console.anthropic.com/v1/oauth/token"
-)
+const claudeTokenEndpoint = "https://console.anthropic.com/v1/oauth/token"
 
 // authHTTPClient performs the OAuth refresh requests; swapped in tests (the
 // same seam the provider package uses for its usage client).
 var authHTTPClient = http.DefaultClient
 
-// claudeKeychainEnabled gates the macOS Keychain path. Tests disable it so
-// they never read from — or write fake credentials into — the real Keychain.
-var claudeKeychainEnabled = runtime.GOOS == "darwin"
-
-// ClaudeAuth provides a current Claude access token, reloading from the store
-// (Keychain on macOS, ~/.claude/.credentials.json elsewhere) and refreshing via
-// the refresh token when needed.
+// ClaudeAuth provides a current Claude access token, reloading from
+// ~/.claude/.credentials.json and refreshing via the refresh token when needed.
 type ClaudeAuth struct {
 	mu      sync.Mutex
 	access  string
 	refresh string
-	account string         // Keychain account, needed for write-back (macOS)
+	account string         // unused placeholder threaded through for write-back
 	wrapper map[string]any // full "claudeAiOauth" object, preserved on write-back
 }
 
@@ -169,17 +158,8 @@ func (a *ClaudeAuth) persistLocked(expiresIn int64) {
 	_ = writeClaudeBlob(blob, a.account)
 }
 
-// readClaudeBlob returns the raw credentials JSON and (on macOS) the Keychain
-// account name for write-back.
+// readClaudeBlob returns the raw credentials JSON from ~/.claude/.credentials.json.
 func readClaudeBlob() (raw []byte, account string, err error) {
-	if claudeKeychainEnabled {
-		out, err := exec.Command("security", "find-generic-password",
-			"-s", claudeKeychainService, "-w").Output()
-		if err == nil && len(bytes.TrimSpace(out)) > 0 {
-			return bytes.TrimSpace(out), keychainAccount(), nil
-		}
-		// fall through to file fallback
-	}
 	home, herr := os.UserHomeDir()
 	if herr != nil {
 		return nil, "", herr
@@ -187,38 +167,12 @@ func readClaudeBlob() (raw []byte, account string, err error) {
 	path := filepath.Join(home, ".claude", ".credentials.json")
 	b, ferr := os.ReadFile(path)
 	if ferr != nil {
-		if claudeKeychainEnabled {
-			return nil, "", fmt.Errorf("claude credentials not found in Keychain (%q) or %s", claudeKeychainService, path)
-		}
 		return nil, "", fmt.Errorf("claude credentials not found at %s: %w", path, ferr)
 	}
 	return b, "", nil
 }
 
-var acctRe = regexp.MustCompile(`"acct"<blob>="([^"]*)"`)
-
-// keychainAccount reads the account field of the Claude Code credentials item
-// so we can update (not duplicate) it on write-back.
-func keychainAccount() string {
-	out, err := exec.Command("security", "find-generic-password",
-		"-s", claudeKeychainService).CombinedOutput()
-	if err != nil {
-		return ""
-	}
-	if m := acctRe.FindSubmatch(out); m != nil {
-		return string(m[1])
-	}
-	return ""
-}
-
-func writeClaudeBlob(blob []byte, account string) error {
-	if claudeKeychainEnabled {
-		args := []string{"add-generic-password", "-U", "-s", claudeKeychainService, "-w", string(blob)}
-		if account != "" {
-			args = append(args, "-a", account)
-		}
-		return exec.Command("security", args...).Run()
-	}
+func writeClaudeBlob(blob []byte, _ string) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
