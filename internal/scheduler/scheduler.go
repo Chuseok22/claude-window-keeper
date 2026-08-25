@@ -48,6 +48,7 @@ type Scheduler struct {
 	log          *log.Logger
 	live         *liveStatus
 	notifyCfg    notify.Config
+	authMu       sync.Mutex // guards authNotified, written from each target's goroutine
 	authNotified map[string]bool
 }
 
@@ -143,7 +144,7 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 			continue
 		}
 		backoff = minBackoff
-		s.authNotified[name] = false
+		s.setAuthNotified(name, false)
 
 		// A spent credit resets the windows, so this snapshot is stale; re-read
 		// before deciding anything from it.
@@ -322,12 +323,29 @@ func (s *Scheduler) redeemExpiringCredit(ctx context.Context, t Target, u *usage
 // token is seen to be definitively rejected, then stays silent until a
 // successful ReadUsage resets the flag (see runTarget).
 func (s *Scheduler) notifyAuthExpired(name string, err error) {
-	if s.authNotified[name] {
+	if s.authWasNotified(name) {
 		return
 	}
-	s.authNotified[name] = true
+	s.setAuthNotified(name, true)
 	notify.Notify(s.notifyCfg, name+": 인증이 만료됐습니다 — 다시 로그인해 주세요",
 		"자격증명 파일을 갱신할 때까지 재시도만 계속합니다.\n"+err.Error())
+}
+
+// authWasNotified reports whether name's auth-expired alert has already been
+// sent for the current episode. Safe for concurrent use: Run launches one
+// goroutine per target, and every goroutine shares this map.
+func (s *Scheduler) authWasNotified(name string) bool {
+	s.authMu.Lock()
+	defer s.authMu.Unlock()
+	return s.authNotified[name]
+}
+
+// setAuthNotified records whether name's auth-expired alert has been sent.
+// Safe for concurrent use (see authWasNotified).
+func (s *Scheduler) setAuthNotified(name string, v bool) {
+	s.authMu.Lock()
+	defer s.authMu.Unlock()
+	s.authNotified[name] = v
 }
 
 // triggerCost renders the token/cost tail for logs, e.g.

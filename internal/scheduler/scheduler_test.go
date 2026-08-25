@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -517,6 +518,79 @@ func TestRunTarget_AuthExpiredError_TriggersNotifyExactlyOnce(t *testing.T) {
 	case <-done:
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("runTarget did not stop after cancellation")
+	}
+}
+
+// barrierAuthErrProvider blocks in ReadUsage until every target's provider
+// has reached the barrier, then all release at once. This forces Run's
+// per-target goroutines to call notifyAuthExpired (and therefore write
+// Scheduler.authNotified) at the same instant, so the test actually exercises
+// the concurrent-map-write bug instead of relying on scheduling luck.
+type barrierAuthErrProvider struct {
+	name  string
+	ready *sync.WaitGroup
+	start <-chan struct{}
+}
+
+func (p *barrierAuthErrProvider) Name() string { return p.name }
+
+func (p *barrierAuthErrProvider) ReadUsage(context.Context) (*usage.Usage, error) {
+	p.ready.Done()
+	<-p.start
+	return nil, &provider.AuthExpiredError{Err: errors.New("refresh rejected")}
+}
+
+func (p *barrierAuthErrProvider) Trigger(context.Context, bool) (*provider.TriggerResult, error) {
+	return nil, errors.New("barrierAuthErrProvider should never be triggered")
+}
+
+// TestRun_ConcurrentAuthNotifiedWrites_NoRace drives Scheduler.Run (not
+// runTarget directly) with several targets so their goroutines write
+// Scheduler.authNotified concurrently, exactly the shape of the data race a
+// single-target test can never see. Run under `go test -race`: without a
+// lock guarding authNotified this reliably reports "fatal error: concurrent
+// map writes" or a DATA RACE, because the barrier forces every goroutine to
+// hit notifyAuthExpired at the same instant instead of merely overlapping by
+// scheduling luck.
+func TestRun_ConcurrentAuthNotifiedWrites_NoRace(t *testing.T) {
+	rt := swapDefaultHTTPClientForTest(t)
+
+	const n = 4
+	var ready sync.WaitGroup
+	ready.Add(n)
+	start := make(chan struct{})
+
+	targets := make([]Target, n)
+	for i := 0; i < n; i++ {
+		targets[i] = Target{Provider: &barrierAuthErrProvider{
+			name:  fmt.Sprintf("p%d", i),
+			ready: &ready,
+			start: start,
+		}}
+	}
+
+	s := New(testConfig(), targets, false, false, io.Discard)
+	s.notifyCfg = notify.Config{BotToken: "t", ChatID: "c"} // enable notify; env is unset in test runs
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.Run(ctx)
+	}()
+
+	// Wait until every goroutine's first ReadUsage call is parked on the
+	// barrier, then release them all in the same instant.
+	ready.Wait()
+	close(start)
+
+	waitFor(t, 2*time.Second, func() bool { return rt.Count() >= n })
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not stop after cancellation")
 	}
 }
 
