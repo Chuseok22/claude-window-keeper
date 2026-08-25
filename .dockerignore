@@ -3,4 +3,3 @@ data/
 docs/
 *.md
 !README.md
-.env

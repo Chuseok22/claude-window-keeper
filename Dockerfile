@@ -23,15 +23,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=build /out/claude-window-keeper /usr/local/bin/claude-window-keeper
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
-# .env is never baked into the image on purpose: it's excluded via .dockerignore
-# and there is no COPY for it here, so `docker build .` succeeds identically
-# whether or not a local .env exists next to this Dockerfile. Secrets
-# (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) belong in the container's runtime
-# environment, not in an image layer that could be pulled/inspected later --
-# pass them with `docker run -e TELEGRAM_BOT_TOKEN=... -e TELEGRAM_CHAT_ID=...`
-# or `docker run --env-file .env` at deploy time (Task 15). entrypoint.sh's
-# `/app/.env` sourcing step still exists as a fallback for anyone who builds a
-# custom variant of this image with a COPY .env line added back in.
+# .env is baked into the image by design (spec Sec.9): TELEGRAM_BOT_TOKEN /
+# TELEGRAM_CHAT_ID are static secrets that never need runtime rewriting, and
+# the DockerHub repo hosting this image stays private, so build-time baking
+# is acceptable here. CI (Task 15) writes .env into the build context from
+# the ENV_FILE secret immediately before `docker build` runs.
+#
+# `COPY .env* /app/` (wildcard, not `COPY .env /app/.env`) so the build still
+# succeeds when no local .env exists -- verified: a wildcard COPY with zero
+# matches is a no-op, it does not fail the build the way naming an exact,
+# possibly-missing file would. No placeholder .env is committed to the repo:
+# .env stays covered by .gitignore's secret-file exclusion (untouched by
+# this task), it has just been dropped from .dockerignore below so a local
+# or CI-written .env sitting next to this Dockerfile is visible to the build
+# context. Local builds with no .env present get no /app/.env at all, so
+# entrypoint.sh's `[ -f /app/.env ]` check is false and alerting stays
+# silently disabled -- the correct default outside of CI.
+COPY .env* /app/
 
 USER keeper
 WORKDIR /home/keeper
