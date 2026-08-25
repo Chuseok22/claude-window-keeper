@@ -6,44 +6,17 @@ import (
 	"testing"
 )
 
-func TestLocalizedTextUsesChineseForChineseLocale(t *testing.T) {
-	setLocale(t, "zh_CN.UTF-8")
-
+func TestLocalizedTextIsKorean(t *testing.T) {
 	text := localizedText()
-	if !strings.Contains(text.pingLong, "参数") {
-		t.Fatalf("pingLong = %q, want Chinese help text", text.pingLong)
+	if !strings.Contains(text.pingLong, "인자") {
+		t.Fatalf("pingLong = %q, want Korean help text", text.pingLong)
 	}
-	if !strings.Contains(text.statusShort, "用量") {
-		t.Fatalf("statusShort = %q, want Chinese help text", text.statusShort)
-	}
-}
-
-func TestLocalizedTextFallsBackToEnglish(t *testing.T) {
-	setLocale(t, "C")
-
-	text := localizedText()
-	if !strings.Contains(text.pingLong, "Arguments") {
-		t.Fatalf("pingLong = %q, want English help text", text.pingLong)
-	}
-	if !strings.Contains(text.statusShort, "usage") {
-		t.Fatalf("statusShort = %q, want English help text", text.statusShort)
-	}
-}
-
-func TestLocalizedTextHonorsLocalePrecedence(t *testing.T) {
-	// POSIX: LC_ALL overrides LANG, so an explicit en_US wins over zh_CN.
-	setLocale(t, "zh_CN.UTF-8")
-	t.Setenv("LC_ALL", "en_US.UTF-8")
-
-	text := localizedText()
-	if !strings.Contains(text.statusShort, "usage") {
-		t.Fatalf("statusShort = %q, want English when LC_ALL=en_US overrides LANG=zh_CN", text.statusShort)
+	if !strings.Contains(text.statusShort, "사용량") {
+		t.Fatalf("statusShort = %q, want Korean help text", text.statusShort)
 	}
 }
 
 func TestRootCommandAliases(t *testing.T) {
-	setLocale(t, "C")
-
 	root := newRootCmd()
 	cases := map[string]string{
 		"p":   "ping",
@@ -81,8 +54,6 @@ func TestRootCommandAliases(t *testing.T) {
 }
 
 func TestHelpFlagDescriptionIsLocalized(t *testing.T) {
-	setLocale(t, "zh_CN.UTF-8")
-
 	root := newRootCmd()
 	var out bytes.Buffer
 	root.SetOut(&out)
@@ -92,14 +63,12 @@ func TestHelpFlagDescriptionIsLocalized(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got := out.String(); !strings.Contains(got, "显示此命令的帮助") {
+	if got := out.String(); !strings.Contains(got, "이 명령어의 도움말 표시") {
 		t.Fatalf("help output = %q, want localized help flag", got)
 	}
 }
 
 func TestRootHelpLocalizesDefaultCompletionCommand(t *testing.T) {
-	setLocale(t, "zh_CN.UTF-8")
-
 	root := newRootCmd()
 	var out bytes.Buffer
 	root.SetOut(&out)
@@ -110,7 +79,7 @@ func TestRootHelpLocalizesDefaultCompletionCommand(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	got := out.String()
-	if !strings.Contains(got, "生成 shell 补全脚本") {
+	if !strings.Contains(got, "셸 자동완성 스크립트 생성") {
 		t.Fatalf("help output = %q, want localized completion command", got)
 	}
 	if strings.Contains(got, "Generate the autocompletion script") {
@@ -119,8 +88,6 @@ func TestRootHelpLocalizesDefaultCompletionCommand(t *testing.T) {
 }
 
 func TestRootHelpPrintsCommandAliases(t *testing.T) {
-	setLocale(t, "C")
-
 	root := newRootCmd()
 	var out bytes.Buffer
 	root.SetOut(&out)
@@ -143,8 +110,6 @@ func TestRootHelpPrintsCommandAliases(t *testing.T) {
 }
 
 func TestConfigHelpPrintsSubcommandAliases(t *testing.T) {
-	setLocale(t, "zh_CN.UTF-8")
-
 	root := newRootCmd()
 	var out bytes.Buffer
 	root.SetOut(&out)
@@ -160,12 +125,4 @@ func TestConfigHelpPrintsSubcommandAliases(t *testing.T) {
 			t.Fatalf("help output = %q, want subcommand alias %q", got, want)
 		}
 	}
-}
-
-func setLocale(t *testing.T, locale string) {
-	t.Helper()
-	for _, key := range []string{"LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"} {
-		t.Setenv(key, "")
-	}
-	t.Setenv("LANG", locale)
 }

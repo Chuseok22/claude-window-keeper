@@ -22,13 +22,13 @@ func TestRunStatusPrintsProgressBeforeReadUsage(t *testing.T) {
 		name:  "codex",
 		usage: &usage.Usage{Provider: "codex"},
 		onRead: func() {
-			if !strings.Contains(progress.String(), "Fetching codex usage...\n") {
+			if !strings.Contains(progress.String(), "codex 사용량 조회 중...\n") {
 				t.Fatalf("progress output before ReadUsage = %q, want fetching message", progress.String())
 			}
 		},
 	}
 
-	if err := runStatus(context.Background(), &out, &progress, enText, []provider.Provider{p}, false, false, "used"); err != nil {
+	if err := runStatus(context.Background(), &out, &progress, koreanText, []provider.Provider{p}, false, false, "used"); err != nil {
 		t.Fatalf("runStatus() error = %v", err)
 	}
 	if !strings.Contains(out.String(), "codex\n") {
@@ -53,7 +53,7 @@ func TestRunStatusJSON(t *testing.T) {
 		fakeStatusProvider{name: "claude", err: errors.New("boom")},
 	}
 
-	err := runStatus(context.Background(), &out, &progress, enText, providers, false, true, "used")
+	err := runStatus(context.Background(), &out, &progress, koreanText, providers, false, true, "used")
 	if err == nil {
 		t.Fatalf("runStatus() error = nil, want failure for the erroring provider")
 	}
@@ -92,13 +92,13 @@ func TestRunStatusLocalizesClaudeSubscriptionAccessError(t *testing.T) {
 	var out bytes.Buffer
 	p := fakeStatusProvider{name: "claude", err: &provider.ClaudeSubscriptionAccessError{}}
 
-	err := runStatus(context.Background(), &out, io.Discard, zhText, []provider.Provider{p}, false, false, "used")
+	err := runStatus(context.Background(), &out, io.Discard, koreanText, []provider.Provider{p}, false, false, "used")
 	if err == nil {
 		t.Fatal("runStatus() error = nil, want provider failure")
 	}
 	got := out.String()
-	if !strings.Contains(got, "Claude 订阅访问不可用") ||
-		!strings.Contains(got, "会员已到期/续费失败") ||
+	if !strings.Contains(got, "Claude 구독 접근이 불가능합니다") ||
+		!strings.Contains(got, "만료/갱신 실패") ||
 		!strings.Contains(got, "Anthropic API Key") {
 		t.Fatalf("localized status output = %q", got)
 	}
@@ -108,7 +108,7 @@ func TestRunStatusJSONPreservesClaudeSubscriptionError(t *testing.T) {
 	var out bytes.Buffer
 	p := fakeStatusProvider{name: "claude", err: &provider.ClaudeSubscriptionAccessError{}}
 
-	err := runStatus(context.Background(), &out, io.Discard, zhText, []provider.Provider{p}, false, true, "used")
+	err := runStatus(context.Background(), &out, io.Discard, koreanText, []provider.Provider{p}, false, true, "used")
 	if err == nil {
 		t.Fatal("runStatus() error = nil, want provider failure")
 	}
@@ -130,10 +130,10 @@ func TestPrintUsageCanShowRemainingPercent(t *testing.T) {
 		Weekly:   usage.Window{UsedPercent: 15},
 	}
 
-	printUsage(&out, enText, u, false, "remaining")
+	printUsage(&out, koreanText, u, false, "remaining")
 
 	got := out.String()
-	if !strings.Contains(got, "99.0% remaining") || !strings.Contains(got, "85.0% remaining") {
+	if !strings.Contains(got, "99.0% 잔여") || !strings.Contains(got, "85.0% 잔여") {
 		t.Fatalf("status output = %q, want remaining percentages", got)
 	}
 }
@@ -150,18 +150,18 @@ func TestPrintUsageMarksMissingWindowNotEnforced(t *testing.T) {
 		},
 	}
 
-	printUsage(&out, enText, u, false, "used")
+	printUsage(&out, koreanText, u, false, "used")
 
 	got := out.String()
-	if !strings.Contains(got, "5h     not currently enforced") {
+	if !strings.Contains(got, "5h     현재 적용되지 않음") {
 		t.Fatalf("status output = %q, want missing 5h window marked as not enforced", got)
 	}
-	if !strings.Contains(got, "24.0% used") {
+	if !strings.Contains(got, "24.0% 사용") {
 		t.Fatalf("status output = %q, want weekly usage rendered", got)
 	}
 }
 
-func TestPrintUsageRendersChinese(t *testing.T) {
+func TestPrintUsageRendersKorean(t *testing.T) {
 	var out bytes.Buffer
 	u := &usage.Usage{
 		Provider: "codex",
@@ -184,21 +184,21 @@ func TestPrintUsageRendersChinese(t *testing.T) {
 		},
 	}
 
-	printUsage(&out, zhText, u, false, "used")
+	printUsage(&out, koreanText, u, false, "used")
 
 	got := out.String()
 	for _, want := range []string{
-		"5h     当前未生效",
-		"周     [",
-		"27.0% 已用",
-		"后重置 (周",
-		"重置券 1 张可用",
-		"可用，发放于",
-		"有效期至",
-		"(剩 29d",
+		"5h     현재 적용되지 않음",
+		"주     [",
+		"27.0% 사용",
+		"후 리셋 (",
+		"리셋 크레딧 1개 사용 가능",
+		"사용 가능, 발급일",
+		"만료일",
+		"(남은 기간 29d",
 	} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("zh status output = %q, want it to contain %q", got, want)
+			t.Fatalf("ko status output = %q, want it to contain %q", got, want)
 		}
 	}
 }
@@ -219,13 +219,13 @@ func TestPrintUsageIncludesResetCredits(t *testing.T) {
 		},
 	}
 
-	printUsage(&out, enText, u, false, "used")
+	printUsage(&out, koreanText, u, false, "used")
 
 	got := out.String()
-	if !strings.Contains(got, "reset credits 1 reset available") || !strings.Contains(got, "available") {
+	if !strings.Contains(got, "리셋 크레딧 1개 사용 가능") || !strings.Contains(got, "사용 가능") {
 		t.Fatalf("status output = %q, want reset credit summary", got)
 	}
-	if !strings.Contains(got, "(in 29d") {
+	if !strings.Contains(got, "(남은 기간 29d") {
 		t.Fatalf("status output = %q, want remaining lifetime on the expires part", got)
 	}
 }
@@ -236,14 +236,14 @@ func TestResetCreditLineOmitsRemainingWhenRedeemedOrExpired(t *testing.T) {
 		ExpiresAt:  time.Now().Add(10 * 24 * time.Hour),
 		RedeemedAt: time.Now().Add(-time.Hour),
 	}
-	if line := resetCreditLine(enText, redeemed); strings.Contains(line, "(in ") {
+	if line := resetCreditLine(koreanText, redeemed); strings.Contains(line, "(남은 기간 ") {
 		t.Fatalf("redeemed credit line = %q, want no remaining lifetime", line)
 	}
 	expired := usage.ResetCredit{
 		Status:    "expired",
 		ExpiresAt: time.Now().Add(-time.Hour),
 	}
-	if line := resetCreditLine(enText, expired); strings.Contains(line, "(in ") {
+	if line := resetCreditLine(koreanText, expired); strings.Contains(line, "(남은 기간 ") {
 		t.Fatalf("expired credit line = %q, want no remaining lifetime", line)
 	}
 }
@@ -296,11 +296,11 @@ func TestFmtZoneRendersOffsetNotAbbreviation(t *testing.T) {
 func TestFmtWindowAndResetCreditCarryTheZone(t *testing.T) {
 	zone := fmtZone(time.Now())
 	w := usage.Window{UsedPercent: 45, ResetsAt: time.Now().Add(3 * time.Hour), WindowSeconds: 18000}
-	if got := fmtWindow(enText, w, "used"); !strings.Contains(got, zone) {
+	if got := fmtWindow(koreanText, w, "used"); !strings.Contains(got, zone) {
 		t.Fatalf("window line = %q, want the zone %q", got, zone)
 	}
 	credit := usage.ResetCredit{Status: "available", ExpiresAt: time.Now().Add(10 * 24 * time.Hour)}
-	if got := resetCreditLine(enText, credit); !strings.Contains(got, zone) {
+	if got := resetCreditLine(koreanText, credit); !strings.Contains(got, zone) {
 		t.Fatalf("credit line = %q, want the zone %q on the expiry", got, zone)
 	}
 }
