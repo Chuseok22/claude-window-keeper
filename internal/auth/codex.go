@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -182,5 +183,7 @@ func (a *CodexAuth) persistLocked(idToken string) {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(path, blob, 0o600)
+	if err := os.WriteFile(path, blob, 0o600); err != nil {
+		log.Printf("codex: credential write-back failed (refreshed token is valid this session but won't survive a restart): %v", err)
+	}
 }

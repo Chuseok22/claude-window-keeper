@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -158,7 +159,9 @@ func (a *ClaudeAuth) persistLocked(expiresIn int64) {
 	if err != nil {
 		return
 	}
-	_ = writeClaudeBlob(blob, a.account)
+	if err := writeClaudeBlob(blob, a.account); err != nil {
+		log.Printf("claude: credential write-back failed (refreshed token is valid this session but won't survive a restart): %v", err)
+	}
 }
 
 // readClaudeBlob returns the raw credentials JSON from ~/.claude/.credentials.json.
