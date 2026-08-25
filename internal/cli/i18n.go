@@ -92,7 +92,7 @@ func localizedText() cliText {
 
 var koreanText = cliText{
 	rootShort: "Claude Code / Codex / Spark 요청 제한 윈도우를 끊김 없이 이어줍니다",
-	rootLong:  "limitping은 AI 코딩 프로바이더의 5시간 요청 제한 윈도우가 리셋되는 순간 바로 ping을 보내, 다음 윈도우가 즉시 시작되고 정렬 상태를 유지하도록 합니다. 사용량은 쿼터를 소모하지 않는 엔드포인트로 조회하며, ping은 공식 CLI를 통해 전송됩니다.",
+	rootLong:  "claude-window-keeper는 AI 코딩 프로바이더의 5시간 요청 제한 윈도우가 리셋되는 순간 바로 ping을 보내, 다음 윈도우가 즉시 시작되고 정렬 상태를 유지하도록 합니다. 사용량은 쿼터를 소모하지 않는 엔드포인트로 조회하며, ping은 공식 CLI를 통해 전송됩니다.",
 	helpFlag:  "이 명령어의 도움말 표시",
 	usageTemplate: `사용법:{{if .Runnable}}
   {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
@@ -126,14 +126,14 @@ var koreanText = cliText{
 `,
 
 	helpCommandShort: "임의의 명령어에 대한 도움말",
-	helpCommandLong:  "애플리케이션의 모든 명령어에 대한 도움말을 제공합니다.\nlimitping help [command] 형태로 입력하면 전체 상세 정보를 볼 수 있습니다.",
+	helpCommandLong:  "애플리케이션의 모든 명령어에 대한 도움말을 제공합니다.\nclaude-window-keeper help [command] 형태로 입력하면 전체 상세 정보를 볼 수 있습니다.",
 	helpUnknownTopic: "알 수 없는 도움말 주제",
 
 	completionShort:      "셸 자동완성 스크립트 생성",
-	completionLong:       "limitping의 셸 자동완성 스크립트를 생성합니다.\n\n셸별 사용법은 `limitping completion [bash|zsh|fish|powershell] --help`를 실행해 확인하세요.",
+	completionLong:       "claude-window-keeper의 셸 자동완성 스크립트를 생성합니다.\n\n셸별 사용법은 `claude-window-keeper completion [bash|zsh|fish|powershell] --help`를 실행해 확인하세요.",
 	completionNoDescFlag: "자동완성 설명 비활성화",
 	completionShellShort: "%s 셸 자동완성 스크립트 생성",
-	completionShellLong:  "limitping의 %s 셸 자동완성 스크립트를 생성합니다.",
+	completionShellLong:  "claude-window-keeper의 %s 셸 자동완성 스크립트를 생성합니다.",
 
 	versionShort: "버전 출력",
 
@@ -176,9 +176,9 @@ var koreanText = cliText{
             기본값은 all이며, 활성화된 모든 프로바이더에 ping을 보냅니다.
 
 예시:
-  limitping ping
-  limitping p claude
-  limitping ping codex --dry-run`,
+  claude-window-keeper ping
+  claude-window-keeper p claude
+  claude-window-keeper ping codex --dry-run`,
 	pingDryRunFlag:  "전송하지 않고 실행될 명령어만 출력",
 	pingWouldRunFmt: "%-7s 실행 예정: %s\n",
 	pingSendingFmt:  "\r%-7s %c 전송 중… %s",
@@ -186,31 +186,31 @@ var koreanText = cliText{
 	pingSuccessFmt:  "%-7s ✓ ping 완료 (%s%s)\n",
 
 	watchShort: "포그라운드 데몬을 실행하며 각 프로바이더의 5시간 윈도우가 리셋될 때 ping 전송",
-	watchLong: `포그라운드 데몬을 실행합니다. 프로바이더의 5시간 윈도우가 리셋되면 limitping이 최소한의 메시지를 보내 다음 윈도우를 시작합니다.
+	watchLong: `포그라운드 데몬을 실행합니다. 프로바이더의 5시간 윈도우가 리셋되면 claude-window-keeper가 최소한의 메시지를 보내 다음 윈도우를 시작합니다.
 
 인자:
   provider  선택. claude, codex, spark, all 중 하나.
             기본값은 all이며, 활성화된 모든 프로바이더를 감시합니다.
 
 예시:
-  limitping watch
-  limitping w claude
-  limitping watch --live
-  limitping watch --dry-run`,
+  claude-window-keeper watch
+  claude-window-keeper w claude
+  claude-window-keeper watch --live
+  claude-window-keeper watch --dry-run`,
 	watchDryRunFlag:        "전송하지 않고 트리거될 시점만 로그로 기록",
 	watchLiveFlag:          "감시 중 실시간 하트비트/상태 라인 표시 (전력 소모 증가)",
 	watchAlreadyRunningFmt: "watch가 이미 실행 중입니다 (pid %d, provider %s%s, 시작 시각 %s). 새로 시작하기 전에 기존 watcher를 먼저 중지하세요",
 
 	redeemShort: "적립된 Codex 요청 제한 리셋 크레딧을 지금 사용",
-	redeemLong: `'limitping status'에 표시된 Codex 리셋 크레딧 하나를 사용하여, 해당 크레딧이 적용 가능한 요청 제한 윈도우를 리셋합니다.
+	redeemLong: `'claude-window-keeper status'에 표시된 Codex 리셋 크레딧 하나를 사용하여, 해당 크레딧이 적용 가능한 요청 제한 윈도우를 리셋합니다.
 
 크레딧 사용은 되돌릴 수 없습니다. 어떤 크레딧을 사용할지는 백엔드가 결정하며, 현재 리셋 가능한 윈도우가 없으면 "nothing to reset"으로 거부되므로 크레딧이 헛되이 소모되지 않습니다.
 
 설정 파일의 [codex] 아래에 auto_redeem = true를 설정하면, 크레딧이 만료에 가까워졌을 때(만료까지 24시간 이내이면서 실제로 회수할 사용량이 있거나, 마지막 1시간 이내) 'watch'가 자동으로 크레딧을 사용하게 할 수 있습니다.
 
 예시:
-  limitping redeem --dry-run
-  limitping redeem`,
+  claude-window-keeper redeem --dry-run
+  claude-window-keeper redeem`,
 	redeemDryRunFlag:    "실제로 사용하지 않고 어떤 크레딧이 사용될지만 표시",
 	redeemNoneAvailable: "사용 가능한 리셋 크레딧이 없습니다",
 	redeemPlanFmt:       "codex   리셋 크레딧 1개를 사용합니다 (만료일 %s, 남은 기간 %s)\n",
