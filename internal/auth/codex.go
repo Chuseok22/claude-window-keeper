@@ -95,6 +95,9 @@ func (a *CodexAuth) Refresh(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("codex token refresh: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized {
+		return "", fmt.Errorf("codex token refresh: HTTP %d: %w", resp.StatusCode, ErrRefreshRejected)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("codex token refresh: HTTP %d", resp.StatusCode)
 	}

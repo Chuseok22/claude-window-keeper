@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Chuseok22/claude-window-keeper/internal/auth"
 	"github.com/Chuseok22/claude-window-keeper/internal/usage"
 )
 
@@ -103,6 +104,20 @@ func (e *UsageHTTPError) Error() string {
 	return fmt.Sprintf("usage endpoint returned HTTP %d: %s", e.StatusCode, e.Body)
 }
 
+// AuthExpiredError means the OAuth refresh token itself was rejected by the
+// provider's token endpoint — the stored credentials are dead and a human
+// needs to log in again (Claude Code / Codex CLI) and refresh the credential
+// file this daemon reads. This is distinct from ClaudeSubscriptionAccessError,
+// which means the account/org disabled subscription access while the token
+// itself is still valid.
+type AuthExpiredError struct{ Err error }
+
+func (e *AuthExpiredError) Error() string {
+	return fmt.Sprintf("refresh token rejected — log in again: %v", e.Err)
+}
+
+func (e *AuthExpiredError) Unwrap() error { return e.Err }
+
 // tokenSource is satisfied by the auth holders for both providers.
 type tokenSource interface {
 	Token(ctx context.Context) (string, error)
@@ -135,6 +150,9 @@ func fetchWithAuth(ctx context.Context, src tokenSource, buildReq func(token str
 	if status == http.StatusUnauthorized {
 		t, rerr := src.Refresh(ctx)
 		if rerr != nil {
+			if errors.Is(rerr, auth.ErrRefreshRejected) {
+				return nil, &AuthExpiredError{Err: rerr}
+			}
 			return nil, fmt.Errorf("unauthorized and refresh failed: %w", rerr)
 		}
 		token = t

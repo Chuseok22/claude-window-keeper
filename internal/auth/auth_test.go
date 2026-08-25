@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -167,6 +168,59 @@ func TestCodexRefreshFailures(t *testing.T) {
 	})
 }
 
+func TestCodexRefresh_RejectedTokenIsErrRefreshRejected(t *testing.T) {
+	cases := map[string]int{
+		"HTTP 400": http.StatusBadRequest,
+		"HTTP 401": http.StatusUnauthorized,
+	}
+	for name, status := range cases {
+		t.Run(name, func(t *testing.T) {
+			writeCodexAuth(t, `{"tokens":{"access_token":"at-old","refresh_token":"rt-old"}}`)
+			fakeRefreshEndpoint(t, func(*http.Request) (*http.Response, error) {
+				return jsonResponse(status, `{"error":"invalid_grant"}`), nil
+			})
+
+			_, err := NewCodexAuth().Refresh(context.Background())
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if !errors.Is(err, ErrRefreshRejected) {
+				t.Fatalf("expected errors.Is(err, ErrRefreshRejected), got: %v", err)
+			}
+		})
+	}
+}
+
+func TestCodexRefresh_NetworkFailureIsNotErrRefreshRejected(t *testing.T) {
+	writeCodexAuth(t, `{"tokens":{"access_token":"at-old","refresh_token":"rt-old"}}`)
+	fakeRefreshEndpoint(t, func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("connection refused")
+	})
+
+	_, err := NewCodexAuth().Refresh(context.Background())
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if errors.Is(err, ErrRefreshRejected) {
+		t.Fatal("a network failure must not be classified as ErrRefreshRejected")
+	}
+}
+
+func TestCodexRefresh_ServerErrorIsNotErrRefreshRejected(t *testing.T) {
+	writeCodexAuth(t, `{"tokens":{"access_token":"at-old","refresh_token":"rt-old"}}`)
+	fakeRefreshEndpoint(t, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusInternalServerError, `{}`), nil
+	})
+
+	_, err := NewCodexAuth().Refresh(context.Background())
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if errors.Is(err, ErrRefreshRejected) {
+		t.Fatal("a 500 must not be classified as ErrRefreshRejected")
+	}
+}
+
 // --- Claude ---
 
 // writeClaudeCreds installs a credentials file under a temp HOME, so tests
@@ -284,5 +338,58 @@ func TestClaudeRefreshFailsWithoutRefreshToken(t *testing.T) {
 	})
 	if _, err := NewClaudeAuth().Refresh(context.Background()); err == nil {
 		t.Fatal("Refresh succeeded without a refresh token")
+	}
+}
+
+func TestClaudeAuth_Refresh_RejectedTokenIsErrRefreshRejected(t *testing.T) {
+	cases := map[string]int{
+		"HTTP 400": http.StatusBadRequest,
+		"HTTP 401": http.StatusUnauthorized,
+	}
+	for name, status := range cases {
+		t.Run(name, func(t *testing.T) {
+			writeClaudeCreds(t, `{"claudeAiOauth":{"accessToken":"at-old","refreshToken":"rt-old"}}`)
+			fakeRefreshEndpoint(t, func(*http.Request) (*http.Response, error) {
+				return jsonResponse(status, `{"error":"invalid_grant"}`), nil
+			})
+
+			_, err := NewClaudeAuth().Refresh(context.Background())
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if !errors.Is(err, ErrRefreshRejected) {
+				t.Fatalf("expected errors.Is(err, ErrRefreshRejected), got: %v", err)
+			}
+		})
+	}
+}
+
+func TestClaudeAuth_Refresh_NetworkFailureIsNotErrRefreshRejected(t *testing.T) {
+	writeClaudeCreds(t, `{"claudeAiOauth":{"accessToken":"at-old","refreshToken":"rt-old"}}`)
+	fakeRefreshEndpoint(t, func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("connection refused")
+	})
+
+	_, err := NewClaudeAuth().Refresh(context.Background())
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if errors.Is(err, ErrRefreshRejected) {
+		t.Fatal("a network failure must not be classified as ErrRefreshRejected")
+	}
+}
+
+func TestClaudeAuth_Refresh_ServerErrorIsNotErrRefreshRejected(t *testing.T) {
+	writeClaudeCreds(t, `{"claudeAiOauth":{"accessToken":"at-old","refreshToken":"rt-old"}}`)
+	fakeRefreshEndpoint(t, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusInternalServerError, `{}`), nil
+	})
+
+	_, err := NewClaudeAuth().Refresh(context.Background())
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if errors.Is(err, ErrRefreshRejected) {
+		t.Fatal("a 500 must not be classified as ErrRefreshRejected")
 	}
 }

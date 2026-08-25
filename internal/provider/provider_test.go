@@ -3,12 +3,15 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Chuseok22/claude-window-keeper/internal/auth"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -293,6 +296,19 @@ func TestFetchWithAuthReportsRefreshFailure(t *testing.T) {
 	_, err := fetchWithAuth(context.Background(), src, bearerReq)
 	if err == nil || !strings.Contains(err.Error(), "refresh failed") || !strings.Contains(err.Error(), "grant revoked") {
 		t.Fatalf("error = %v, want unauthorized+refresh failure", err)
+	}
+}
+
+func TestFetchWithAuthRefreshRejected_ReturnsAuthExpiredError(t *testing.T) {
+	// The OAuth server definitively rejected the refresh token: fetchWithAuth
+	// must surface this as a typed *AuthExpiredError, not a generic wrapped error.
+	authProbe(t, "never-issued")
+	src := &rotatingTokenSource{token: "tok-stale", refreshErr: fmt.Errorf("wrapped: %w", auth.ErrRefreshRejected)}
+
+	_, err := fetchWithAuth(context.Background(), src, bearerReq)
+	var authErr *AuthExpiredError
+	if !errors.As(err, &authErr) {
+		t.Fatalf("err = %T %v, want *AuthExpiredError", err, err)
 	}
 }
 

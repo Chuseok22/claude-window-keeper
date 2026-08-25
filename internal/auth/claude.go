@@ -92,6 +92,9 @@ func (a *ClaudeAuth) Refresh(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("claude token refresh: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized {
+		return "", fmt.Errorf("claude token refresh: HTTP %d: %w", resp.StatusCode, ErrRefreshRejected)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("claude token refresh: HTTP %d", resp.StatusCode)
 	}
