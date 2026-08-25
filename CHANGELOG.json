@@ -1,0 +1,106 @@
+{
+  "metadata": {
+    "lastUpdated": "2026-08-25T14:08:52Z",
+    "currentVersion": "0.10.0",
+    "projectTypes": [
+      "go"
+    ],
+    "totalReleases": 1
+  },
+  "releases": [
+    {
+      "version": "0.10.0",
+      "project_types": [
+        "go"
+      ],
+      "date": "2026-08-25",
+      "pr_number": null,
+      "raw_summary": "## [0.10.0]\n\n### ✨ 기능\n- add live status line (spinner + countdowns) to watch\n- add background (bg) command to run watch detached\n- hook-based active-session detection for Claude and Codex\n\n### 🐛 수정\n- submit the prompt in Claude's interactive trigger\n\n### ♻️ 리팩토링\n- hooks-only active-session detection; auto-install hooks\n- drop GLM provider, target Claude Code and Codex only\n\n### 🔧 변경사항\n- install project-auto-wizard Go CI/CD templates\n- roll bg command and watch animation into v0.4.0\n- add project icon and social-preview assets\n- release v0.4.0\n- guard Scheduler.authNotified with a mutex\n- fix stale watch.lock treating own PID as a live conflict\n- log credential write-back failures instead of swallowing them\n- document required chown of NAS credential volume to UID 1001\n- point PROJECT-GO-SIMPLE-CICD at this daemon's actual healthcheck/volume needs\n- bake .env into the image per spec section 9 design\n- add root Dockerfile and .env-sourcing entrypoint\n- translate README header to English\n- rewrite README for Docker/NAS-only, Korean framing, new branding\n- fix leftover limitping references in Korean i18n text\n- collapse i18n to Korean-only CLI text\n- verify Trigger() actually started a window instead of trusting PTY exit\n- notify Telegram once per auth-expiry episode, drop other alert sites\n- replace macOS notify with Telegram Bot API alerting\n- add typed AuthExpiredError for definitively-rejected refresh tokens\n- add ATTRIBUTION.md, credit wavever/CCLimitPing as upstream\n- rename module to github.com/Chuseok22/claude-window-keeper, binary to claude-window-keeper\n- remove install.sh (Docker-only distribution)\n- remove goreleaser (superseded by project-auto-wizard's release/deploy pipeline)\n- drop macOS Keychain auth and Windows-only files (Linux/amd64 only)\n- remove bg/continue/hooks/schedule/upgrade/uninstall and active-task detection\n- Stop the reset-credit tests from reading real Codex credentials\n- Prepare v0.9.0\n- Add Codex reset-credit redemption and zone-tagged reset times\n- Diagnose disabled Claude subscription access behind usage 429s\n- Prepare v0.8.0\n- Show remaining lifetime on Codex reset credits\n- Localize status and ping text output for Chinese locales\n- Adapt Codex to the weekly-only rate-limit regime\n- Prepare v0.7.0\n- Show Codex reset credits in status\n- Add scheduled ping command\n- Add `continue` interactive proxy that auto-resumes on 5h recovery\n- Add Spark as a Codex-backed provider (#4)\n- Add status --json output\n- Reduce idle watch polling\n- Add status progress output\n- Reduce watch power usage\n- Add bg ping history and ASCII heartbeat\n- Prepare v0.4.2 release\n- Fix Codex ping window trigger\n- Fix usage endpoint reads\n- Add README icon\n- Prepare v0.3.0 release docs\n- Improve CLI help aliases and localization\n- Defer pings while provider tasks run\n- Add upgrade and uninstall commands\n- Retry usage status requests\n- Prepare repository for open source release\n- Switch Claude trigger to interactive CLI\n- Add per-provider watch: `watch ` watches just that one\n- Initial commit: limitping — keep Claude/Codex/GLM windows back-to-back",
+      "parsed_changes": {
+        "기능": {
+          "title": "✨ 기능",
+          "items": [
+            "add live status line (spinner + countdowns) to watch",
+            "add background (bg) command to run watch detached",
+            "hook-based active-session detection for Claude and Codex"
+          ]
+        },
+        "수정": {
+          "title": "🐛 수정",
+          "items": [
+            "submit the prompt in Claude's interactive trigger"
+          ]
+        },
+        "리팩토링": {
+          "title": "♻️ 리팩토링",
+          "items": [
+            "hooks-only active-session detection; auto-install hooks",
+            "drop GLM provider, target Claude Code and Codex only"
+          ]
+        },
+        "변경사항": {
+          "title": "🔧 변경사항",
+          "items": [
+            "install project-auto-wizard Go CI/CD templates",
+            "roll bg command and watch animation into v0.4.0",
+            "add project icon and social-preview assets",
+            "release v0.4.0",
+            "guard Scheduler.authNotified with a mutex",
+            "fix stale watch.lock treating own PID as a live conflict",
+            "log credential write-back failures instead of swallowing them",
+            "document required chown of NAS credential volume to UID 1001",
+            "point PROJECT-GO-SIMPLE-CICD at this daemon's actual healthcheck/volume needs",
+            "bake .env into the image per spec section 9 design",
+            "add root Dockerfile and .env-sourcing entrypoint",
+            "translate README header to English",
+            "rewrite README for Docker/NAS-only, Korean framing, new branding",
+            "fix leftover limitping references in Korean i18n text",
+            "collapse i18n to Korean-only CLI text",
+            "verify Trigger() actually started a window instead of trusting PTY exit",
+            "notify Telegram once per auth-expiry episode, drop other alert sites",
+            "replace macOS notify with Telegram Bot API alerting",
+            "add typed AuthExpiredError for definitively-rejected refresh tokens",
+            "add ATTRIBUTION.md, credit wavever/CCLimitPing as upstream",
+            "rename module to github.com/Chuseok22/claude-window-keeper, binary to claude-window-keeper",
+            "remove install.sh (Docker-only distribution)",
+            "remove goreleaser (superseded by project-auto-wizard's release/deploy pipeline)",
+            "drop macOS Keychain auth and Windows-only files (Linux/amd64 only)",
+            "remove bg/continue/hooks/schedule/upgrade/uninstall and active-task detection",
+            "Stop the reset-credit tests from reading real Codex credentials",
+            "Prepare v0.9.0",
+            "Add Codex reset-credit redemption and zone-tagged reset times",
+            "Diagnose disabled Claude subscription access behind usage 429s",
+            "Prepare v0.8.0",
+            "Show remaining lifetime on Codex reset credits",
+            "Localize status and ping text output for Chinese locales",
+            "Adapt Codex to the weekly-only rate-limit regime",
+            "Prepare v0.7.0",
+            "Show Codex reset credits in status",
+            "Add scheduled ping command",
+            "Add `continue` interactive proxy that auto-resumes on 5h recovery",
+            "Add Spark as a Codex-backed provider (#4)",
+            "Add status --json output",
+            "Reduce idle watch polling",
+            "Add status progress output",
+            "Reduce watch power usage",
+            "Add bg ping history and ASCII heartbeat",
+            "Prepare v0.4.2 release",
+            "Fix Codex ping window trigger",
+            "Fix usage endpoint reads",
+            "Add README icon",
+            "Prepare v0.3.0 release docs",
+            "Improve CLI help aliases and localization",
+            "Defer pings while provider tasks run",
+            "Add upgrade and uninstall commands",
+            "Retry usage status requests",
+            "Prepare repository for open source release",
+            "Switch Claude trigger to interactive CLI",
+            "Add per-provider watch: `watch <claude|codex|glm>` watches just that one",
+            "Initial commit: limitping — keep Claude/Codex/GLM windows back-to-back"
+          ]
+        }
+      },
+      "parse_method": "markdown"
+    }
+  ]
+}

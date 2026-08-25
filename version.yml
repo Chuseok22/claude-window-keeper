@@ -25,14 +25,14 @@
 # - basic: version.yml only
 # ===
 
-version: "0.9.0"
-version_code: 1 # app build number
+version: "0.10.0"
+version_code: 2  # app build number
 project_types: ["go"] # first entry is primary
 project_paths: # 타입별 프로젝트 폴더 (레포 루트 기준 상대경로)
   go: "." # go.mod
 metadata:
-  last_updated: "2026-08-24 07:54:14"
-  last_updated_by: "project-auto-wizard"
+  last_updated: "2026-08-25"
+  last_updated_by: "Chuseok22"
   default_branch: "main"
   integration_date: "2026-08-24"
   template:
