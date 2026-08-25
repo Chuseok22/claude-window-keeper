@@ -32,7 +32,7 @@ func newRootCmd() *cobra.Command {
 	if text.usageTemplate != "" {
 		root.SetUsageTemplate(text.usageTemplate)
 	}
-	root.AddCommand(newStatusCmd(), newPingCmd(), newWatchCmd(), newScheduleCmd(), newContinueCmd(), newRedeemCmd(), newBackgroundCmd(), newConfigCmd(), newHooksCmd(), newHookCmd(), newUpgradeCmd(), newUninstallCmd(), newVersionCmd())
+	root.AddCommand(newStatusCmd(), newPingCmd(), newWatchCmd(), newRedeemCmd(), newConfigCmd(), newVersionCmd())
 	localizeCompletionCommand(root, text)
 	root.SetHelpCommand(newHelpCommand(text))
 	localizeHelpFlags(root, text)

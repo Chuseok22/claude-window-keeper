@@ -16,7 +16,6 @@ import (
 
 	"github.com/creack/pty"
 
-	"github.com/wavever/CCLimitPing/internal/activity"
 	"github.com/wavever/CCLimitPing/internal/auth"
 	"github.com/wavever/CCLimitPing/internal/config"
 	"github.com/wavever/CCLimitPing/internal/usage"
@@ -88,16 +87,6 @@ func NewClaude(cfg config.ProviderConfig) *Claude {
 }
 
 func (c *Claude) Name() string { return "claude" }
-
-func (c *Claude) ActiveTask(_ context.Context) (string, bool, error) {
-	// Active-session detection relies entirely on the CLI hooks (see `limitping
-	// hooks install`). Without them we don't guess from the process list — the
-	// scheduler just pings.
-	if !activity.Enabled("claude") {
-		return "", false, nil
-	}
-	return activity.Active("claude")
-}
 
 type claudeWindow struct {
 	Utilization float64 `json:"utilization"`

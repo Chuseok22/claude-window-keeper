@@ -30,7 +30,6 @@ const (
 	defaultWindow  = 5 * time.Hour // fallback when the API omits the window length
 	readTimeout    = 30 * time.Second
 	triggerTimeout = 3 * time.Minute
-	activeTaskPoll = time.Minute
 )
 
 // Target pairs a provider with its scheduling options.
@@ -217,18 +216,6 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 			aligned = true
 		}
 
-		if desc, active, err := activeProviderTask(ctx, t.Provider); err != nil {
-			s.log.Printf("[%s] active task check failed: %v; pinging anyway", name, err)
-		} else if active {
-			s.log.Printf("[%s] window reset but %s is running; waiting %s for it to start the next window",
-				name, desc, activeTaskPoll.Round(time.Second))
-			s.live.set(name, desc+" active — deferring ping", time.Now().Add(activeTaskPoll))
-			if !sleepCtx(ctx, activeTaskPoll) {
-				return
-			}
-			continue
-		}
-
 		// Trigger the window.
 		if !s.dryRun {
 			s.log.Printf("[%s] window reset — triggering ping now…", name)
@@ -307,14 +294,6 @@ func (s *Scheduler) redeemExpiringCredit(ctx context.Context, t Target, u *usage
 		s.log.Printf("[%s] reset credit not spent: %s", name, outcome)
 	}
 	return false
-}
-
-func activeProviderTask(ctx context.Context, p provider.Provider) (string, bool, error) {
-	detector, ok := p.(provider.ActiveTaskDetector)
-	if !ok {
-		return "", false, nil
-	}
-	return detector.ActiveTask(ctx)
 }
 
 func (s *Scheduler) notify(title, msg string) {

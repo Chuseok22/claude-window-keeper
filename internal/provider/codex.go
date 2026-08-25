@@ -22,7 +22,6 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/creack/pty"
 
-	"github.com/wavever/CCLimitPing/internal/activity"
 	"github.com/wavever/CCLimitPing/internal/auth"
 	"github.com/wavever/CCLimitPing/internal/config"
 	"github.com/wavever/CCLimitPing/internal/usage"
@@ -67,10 +66,6 @@ func NewCodex(cfg config.ProviderConfig) *Codex {
 }
 
 func (c *Codex) Name() string { return "codex" }
-
-func (c *Codex) ActiveTask(ctx context.Context) (string, bool, error) {
-	return codexActiveTask(ctx)
-}
 
 func (c *Codex) ReadUsage(ctx context.Context) (*usage.Usage, error) {
 	body, r, err := readCodexUsage(ctx, c.auth)
@@ -211,10 +206,6 @@ func NewSpark(cfg config.ProviderConfig) *Spark {
 
 func (s *Spark) Name() string { return "spark" }
 
-func (s *Spark) ActiveTask(ctx context.Context) (string, bool, error) {
-	return codexActiveTask(ctx)
-}
-
 func (s *Spark) ReadUsage(ctx context.Context) (*usage.Usage, error) {
 	body, r, err := readCodexUsage(ctx, s.auth)
 	if err != nil {
@@ -229,17 +220,6 @@ func (s *Spark) ReadUsage(ctx context.Context) (*usage.Usage, error) {
 
 func (s *Spark) Trigger(ctx context.Context, dryRun bool) (*TriggerResult, error) {
 	return triggerCodex(ctx, s.cfg, dryRun)
-}
-
-func codexActiveTask(_ context.Context) (string, bool, error) {
-	// Active-session detection relies entirely on the Codex CLI hooks (see
-	// `limitping hooks install`). Without them we don't guess from the process
-	// list; the scheduler just pings. Spark uses the same activity signal
-	// because its actual CLI session is still `codex`.
-	if !activity.Enabled("codex") {
-		return "", false, nil
-	}
-	return activity.Active("codex")
 }
 
 type codexWindow struct {

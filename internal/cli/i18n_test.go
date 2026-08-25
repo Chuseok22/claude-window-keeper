@@ -46,18 +46,13 @@ func TestRootCommandAliases(t *testing.T) {
 
 	root := newRootCmd()
 	cases := map[string]string{
-		"p":      "ping",
-		"sched":  "schedule",
-		"s":      "status",
-		"w":      "watch",
-		"c":      "config",
-		"cfg":    "config",
-		"v":      "version",
-		"ver":    "version",
-		"up":     "upgrade",
-		"update": "upgrade",
-		"rm":     "uninstall",
-		"remove": "uninstall",
+		"p":   "ping",
+		"s":   "status",
+		"w":   "watch",
+		"c":   "config",
+		"cfg": "config",
+		"v":   "version",
+		"ver": "version",
 	}
 
 	for alias, want := range cases {
@@ -140,8 +135,6 @@ func TestRootHelpPrintsCommandAliases(t *testing.T) {
 		"ping, p",
 		"status, s, stat",
 		"version, v, ver",
-		"upgrade, up, update",
-		"uninstall, rm, remove",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("help output = %q, want command alias %q", got, want)

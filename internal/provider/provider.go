@@ -55,13 +55,6 @@ type Provider interface {
 	Trigger(ctx context.Context, dryRun bool) (*TriggerResult, error)
 }
 
-// ActiveTaskDetector is optionally implemented by providers that can tell
-// whether a user-owned local task is already running and likely to start the
-// next window itself.
-type ActiveTaskDetector interface {
-	ActiveTask(ctx context.Context) (description string, active bool, err error)
-}
-
 // Backend outcomes of a reset-credit redemption.
 const (
 	RedeemReset           = "reset"            // a credit was spent and the eligible windows were reset

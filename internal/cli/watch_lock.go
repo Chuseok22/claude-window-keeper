@@ -113,3 +113,11 @@ func watchAlreadyRunningError(st watchLockState) error {
 	started := st.StartedAt.Format("2006-01-02 15:04:05")
 	return fmt.Errorf(localizedText().watchAlreadyRunningFmt, st.PID, st.Provider, dryRunNote(st.DryRun), started)
 }
+
+// dryRunNote returns a human-readable suffix for the dry-run flag.
+func dryRunNote(dryRun bool) string {
+	if dryRun {
+		return " (dry-run)"
+	}
+	return ""
+}

@@ -18,7 +18,6 @@ type stubProvider struct {
 	usage    *usage.Usage
 	readErr  error
 	trigErr  error
-	active   bool // reported by ActiveTask
 	reads    int
 	triggers int
 }
@@ -43,12 +42,6 @@ func (p *stubProvider) Trigger(context.Context, bool) (*provider.TriggerResult, 
 		return nil, p.trigErr
 	}
 	return &provider.TriggerResult{Command: "stub trigger"}, nil
-}
-
-func (p *stubProvider) ActiveTask(context.Context) (string, bool, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return "stub session", p.active, nil
 }
 
 func (p *stubProvider) counts() (reads, triggers int) {
@@ -308,20 +301,6 @@ func TestRunTargetHonorsAlignStart(t *testing.T) {
 	})
 	if time.Now().Before(align) {
 		t.Fatal("pinged before align_start")
-	}
-}
-
-func TestRunTargetDefersWhileProviderTaskActive(t *testing.T) {
-	p := &stubProvider{
-		usage:  &usage.Usage{FiveHour: usage.Window{WindowSeconds: 18000}},
-		active: true,
-	}
-	stop := runStub(t, Target{Provider: p})
-	defer stop()
-
-	reads, triggers := settleAndCount(t, p)
-	if reads != 1 || triggers != 0 {
-		t.Fatalf("active session should defer the ping; reads=%d triggers=%d", reads, triggers)
 	}
 }
 
