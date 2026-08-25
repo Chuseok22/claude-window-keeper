@@ -1,0 +1,80 @@
+# CI/CD, Docker, 배포
+
+## ⚠️ `main` push = 실제 배포입니다
+
+`.github/workflows/`는 `project-auto-wizard`(범용 프로젝트 부트스트래핑 도구)가 설치한 **trunk-based** 파이프라인입니다. `version.yml`의 `metadata.template.branches.mode: "trunk-based"`가 이 모드를 켭니다. 이 말은:
+
+- **`main`에 push할 때마다 자동으로**: 버전 bump → 체인지로그 생성 → git 태그 → GitHub Release 발행 → Docker 이미지 빌드 → DockerHub push → SSH로 NAS 접속해서 컨테이너 재배포까지 **전부 자동으로 이어집니다.**
+- `PROJECT-GO-CI.yaml`(빌드 검증)과 `PROJECT-COMMON-RELEASE-PUBLISH.yaml`(릴리즈)은 **서로 독립된 워크플로우 파일**이라 `needs:` 의존관계가 없습니다 — **빌드가 깨진 커밋도 그대로 릴리즈되고 배포될 수 있습니다.** 이건 알려진 갭이고([Issue #2](https://github.com/Chuseok22/claude-window-keeper/issues/2) 근처 논의 참고), 워크플로우 로직을 못 고치는 제약(아래 참고) 때문에 "main에 깨진 커밋을 push하지 않는다"는 운영 규율로만 막고 있습니다. **push 전에 반드시 로컬에서 `gofmt -l .`, `go build ./...`, `go vet ./...`, `go test -race ./...`를 통과시키세요.**
+
+## 워크플로우 파일: 어디까지 고쳐도 되나
+
+`.github/workflows/PROJECT-*.yaml` 파일 상단에 `# project-auto-wizard:managed-workflow` 주석이 있습니다. 이건
+**마법사가 관리하는 파일**이라는 뜻입니다:
+
+- **`jobs:`/`steps:` 로직은 직접 고치지 마세요.** 다음에 `project-auto-wizard`를 다시 돌리면 덮어써질 수
+  있습니다.
+- **`env:` 블록(파일 상단, 주석에 "프로젝트별 수정 필요"라고 명시된 구간)은 안전하게 수정 가능**하고, 실제로
+  이미 이 프로젝트에 맞게 커스터마이즈돼 있습니다(아래 표 참고).
+- `.github/scripts/*.py`(`version_manager.py`, `changelog_manager.py`, `issue_helper.py`,
+  `truncate_release_notes.py`)도 마법사가 관리하는 로직입니다. 손대지 마세요.
+- `.github/.wizard/`는 마법사 자체의 상태 추적 디렉터리입니다. 건드리지 마세요.
+
+### 이미 커스터마이즈된 값 (`PROJECT-GO-SIMPLE-CICD.yaml`)
+
+이 데몬은 HTTP 서버가 없어서, 마법사 기본값(HTTP 서비스 전제)을 이렇게 고쳐놨습니다:
+
+| 변수 | 값 | 이유 |
+|---|---|---|
+| `HEALTHCHECK_PATH` | `""` (빈 값) | HTTP 헬스체크 비활성화 — 이 데몬은 포트를 안 엽니다 |
+| `HEALTHCHECK_LOG_PATTERN` | `"watching"` | `scheduler.go`의 `Run()`이 찍는 시작 로그(`"watching %v (...)"`와 매칭. **이 로그 문구를 바꾸면 헬스체크가 깨집니다** |
+| `ENABLE_VOLUME_MOUNT` | `"true"` | |
+| `VOLUME_HOST_PATH` | `/volume1/project/claude-window-keeper/home` | NAS 쪽 실제 경로 |
+| `VOLUME_CONTAINER_PATH` | `/home/keeper` | 컨테이너의 `$HOME` 전체(Dockerfile의 `ENV HOME=/home/keeper`와 일치) — `.claude`/`.codex`가 이 아래 서브디렉터리로 자동 영속화됨. 볼륨 쌍을 하나만 지원하는 스크립트 제약 때문에 둘을 따로 마운트하는 대신 `$HOME` 전체를 마운트하는 방식을 씀 |
+| `CONTAINER_INTERNAL_PORT`/`DEPLOY_PORT` | 그대로 둠 | 아무 것도 안 듣지만 무해함(스크립트 로직을 안 고치려고 그냥 둠) — [Issue #2](https://github.com/Chuseok22/claude-window-keeper/issues/2) |
+
+**주의**: `version.yml`의 `deploy.go.VOLUME_HOST_PATH`/`VOLUME_CONTAINER_PATH`는 위 표와 값이 **다릅니다**(아직
+옛날 `/mnt/__PROJECT_NAME__` 형태 그대로) — 이건 마법사가 별도로 기억하는 메타데이터라서 워크플로우 파일 자체를
+직접 고칠 때는 안 갱신됐습니다. 마법사를 다시 돌려서 재동기화가 일어나면 이 값들이 워크플로우 파일을 덮어쓸
+수도 있으니, 그런 상황이 생기면 이 표를 기준으로 다시 맞춰야 합니다.
+
+## goreleaser는 없습니다
+
+원래 있던 `.goreleaser.yaml`(크로스플랫폼 바이너리 릴리즈용)은 완전히 삭제했습니다. Docker 전용 배포로
+좁히면서 바이너리 아카이브 배포 자체가 불필요해졌고, 마법사의 릴리즈 파이프라인이 버전/체인지로그 자동화를
+더 잘 해줍니다. `install.sh`(curl 바이너리 설치 스크립트)도 같은 이유로 삭제했습니다.
+
+## Docker
+
+- **`Dockerfile`은 저장소 루트에 있습니다** (`docker/Dockerfile`이 아님) — 마법사 워크플로우의 `file:
+  ./Dockerfile` 기본값을 그대로 따르기 위해서입니다.
+- 멀티스테이지: `golang:1.25-bookworm`으로 빌드 → `node:22-bookworm-slim`(Debian bookworm의 apt nodejs가
+  v18이라 `@anthropic-ai/claude-code`의 `engines.node >=22` 요구사항을 못 맞춰서 이 베이스 이미지를 씀)에
+  `@anthropic-ai/claude-code`, `@openai/codex`를 npm으로 설치.
+- 컨테이너는 UID **1001**(`keeper` 유저)로 돕니다 — `node:22-bookworm-slim` 베이스 이미지가 이미 UID 1000을
+  자체 `node` 유저로 쓰고 있어서 1001을 씀.
+- `entrypoint.sh`가 `/app/.env`가 있으면 `set -a; . /app/.env; set +a`로 소싱한 뒤 바이너리를 exec합니다.
+- `.env`는 **의도적으로 이미지에 구워집니다** (아래 시크릿 섹션 참고). `COPY .env* /app/`(와일드카드 —
+  파일이 없어도 빌드가 안 깨짐, `COPY .env /app/.env`처럼 정확한 파일명을 쓰면 없을 때 빌드가 실패함).
+
+## 시크릿 관리
+
+| 시크릿 | 어디서 오나 | 어떻게 컨테이너에 도달하나 |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | GitHub Secret `ENV_FILE`의 내용 (`.env` 형식) | CI가 빌드 직전에 `.env` 파일로 씀 → Dockerfile이 이미지에 구움 → entrypoint.sh가 소싱 |
+| OAuth 자격증명(`.credentials.json`, `auth.json`) | 사람이 다른 머신(맥)에서 로그인 후 수동으로 복사 | 이미지가 아니라 **볼륨 마운트**로만 관리 — 재발급/refresh로 계속 바뀌는 데이터라 이미지에 구우면 안 됨 |
+
+**`TELEGRAM_*`는 왜 이미지에 구워도 되는가**: OAuth 토큰과 달리 런타임에 재기록될 필요가 없는 정적 시크릿이기
+때문입니다. 단, 이게 성립하려면 **DockerHub 저장소가 반드시 private이어야 합니다** — public이면 이미지를
+pull한 누구나 `docker run --entrypoint cat <image> /app/.env`로 토큰을 꺼내볼 수 있습니다. 이 요구사항이
+README에 명시적으로 안 써있는 게 [Issue #4](https://github.com/Chuseok22/claude-window-keeper/issues/4)입니다.
+
+로컬에서 `docker build .`을 돌릴 때 저장소 루트에 진짜 `.env`가 있으면 그 내용도 그대로 이미지에 들어갑니다 —
+주의하세요.
+
+## 자격증명 볼륨 권한
+
+컨테이너는 UID 1001로 돕니다. NAS 쪽 볼륨 디렉터리를 `sudo mkdir -p`로 만들면 root 소유가 되므로, **반드시
+`sudo chown -R 1001:1001 <볼륨 경로>`를 해줘야** 컨테이너가 자격증명 파일을 읽고 쓸 수 있습니다(README의
+"How it deploys" 섹션에 이 단계가 명시돼 있습니다 — 빠뜨리면 인증이 조용히 영원히 실패하고, 알림도 안 옵니다.
+이유: 권한 에러는 `AuthExpiredError`가 아니라서 Telegram 알림 조건에 안 걸립니다).
