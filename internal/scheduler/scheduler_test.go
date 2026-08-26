@@ -375,6 +375,38 @@ func TestRunTarget_VerifiesWindowAfterTrigger_RetriesWhenNotActive(t *testing.T)
 	})
 }
 
+// TestRunTarget_VerifyFailureCap_StopsRetriggeringAfterMaxFailures proves that
+// repeated Trigger()-verification failures don't retry forever: once
+// maxVerifyFailures consecutive failures accumulate, the loop stops
+// re-triggering and falls back to the normal duplicate-ping-guard wait
+// instead of hammering the (broken) Trigger() every backoff cycle.
+func TestRunTarget_VerifyFailureCap_StopsRetriggeringAfterMaxFailures(t *testing.T) {
+	p := &stubProvider{
+		usage: &usage.Usage{FiveHour: usage.Window{WindowSeconds: 18000}},
+	}
+	stop := runStub(t, Target{Provider: p})
+	defer stop()
+
+	// Reaching maxVerifyFailures takes postPingGrace per attempt plus the
+	// escalating verify-backoff between attempts (minBackoff, then
+	// nextBackoff(minBackoff)), so give it generous room.
+	waitFor(t, 3*postPingGrace+minBackoff+nextBackoff(minBackoff)+15*time.Second, func() bool {
+		_, triggers := p.counts()
+		return triggers >= maxVerifyFailures
+	})
+
+	// The cap must actually stop retries, not merely delay them: without a
+	// cap, escalation alone would still retrigger around
+	// postPingGrace+nextBackoff(nextBackoff(minBackoff)) after the 3rd
+	// trigger (the would-be 4th verify-backoff step). Wait past that point
+	// so an "escalates but never caps" regression would be caught here
+	// instead of passing on a too-short check.
+	time.Sleep(postPingGrace + nextBackoff(nextBackoff(minBackoff)) + 15*time.Second)
+	if _, triggers := p.counts(); triggers != maxVerifyFailures {
+		t.Fatalf("verify-failure cap should stop retriggering; triggers = %d, want %d", triggers, maxVerifyFailures)
+	}
+}
+
 func TestNextBackoff(t *testing.T) {
 	if got := nextBackoff(minBackoff); got != time.Minute {
 		t.Fatalf("nextBackoff(30s) = %v, want 1m", got)
