@@ -23,12 +23,19 @@ goroutine이 동시에 건드리는 테스트가 존재하는가"를 따로 확�
 `internal/scheduler/scheduler_test.go`의 `TestRun_ConcurrentAuthNotifiedWrites_NoRace` (barrier로 동시 쓰기를
 강제하는 패턴).
 
-## 느린 테스트 하나 있음
+## 느린 테스트가 두 개 있음
 
-`TestRunTarget_VerifiesWindowAfterTrigger_RetriesWhenNotActive`(`internal/scheduler/scheduler_test.go`)가
-실제 `postPingGrace`(15초)+`minBackoff`(30초)를 그대로 기다려서 ~45초 걸립니다. 나머지 테스트는 전부
-500ms 이하입니다. [Issue #5](https://github.com/Chuseok22/claude-window-keeper/issues/5)에 개선 아이디어가
-있습니다(두 상수를 테스트에서 주입 가능한 `var`로 바꾸기).
+- `TestRunTarget_VerifiesWindowAfterTrigger_RetriesWhenNotActive`(`internal/scheduler/scheduler_test.go`)가
+  실제 `postPingGrace`(15초)+`minBackoff`(30초)를 그대로 기다려서 ~45초 걸립니다.
+- `TestRunTarget_VerifyFailureCap_StopsRetriggeringAfterMaxFailures`(같은 파일, Issue #1 fix)는 연속 검증
+  실패 3회에 도달할 때까지 `postPingGrace`×3 + 실제 verify-backoff escalation(30초→60초)을 그대로 기다린 뒤,
+  cap이 재시도를 실제로 막는지(단순히 지연시키는 게 아니라) 확인하려고 escalation-without-cap 회귀가
+  4번째 핑을 쏠 시점(약 135초 뒤)까지도 더 기다립니다 — 실측 ~4분 30초로 이 스위트에서 가장 느린 테스트입니다.
+  (초기 버전은 3회 도달 직후 2초만 기다리고 끝내서 cap 유무를 구분 못 하는 공허한 단언이었음 — fable5 리뷰에서
+  발견, 대기시간을 늘려 실제로 회귀를 잡도록 고침.)
+
+나머지 테스트는 전부 500ms 이하입니다. [Issue #5](https://github.com/Chuseok22/claude-window-keeper/issues/5)에
+개선 아이디어가 있습니다(관련 상수를 테스트에서 주입 가능한 `var`로 바꾸기).
 
 ## Docker 스모크 테스트 (로컬)
 
