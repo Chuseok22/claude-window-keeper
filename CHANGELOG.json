@@ -1,13 +1,24 @@
 {
   "metadata": {
-    "lastUpdated": "2026-08-25T14:36:22Z",
-    "currentVersion": "0.10.1",
+    "lastUpdated": "2026-08-28T08:11:08Z",
+    "currentVersion": "0.10.2",
     "projectTypes": [
       "go"
     ],
-    "totalReleases": 2
+    "totalReleases": 3
   },
   "releases": [
+    {
+      "version": "0.10.2",
+      "project_types": [
+        "go"
+      ],
+      "date": "2026-08-28",
+      "pr_number": null,
+      "raw_summary": "## [0.10.2]",
+      "parsed_changes": {},
+      "parse_method": "markdown_failed"
+    },
     {
       "version": "0.10.1",
       "project_types": [
