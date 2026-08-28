@@ -24,13 +24,14 @@ import (
 )
 
 const (
-	postPingGrace  = 15 * time.Second // wait after a ping before re-reading usage
-	minBackoff     = 30 * time.Second
-	maxBackoff     = 10 * time.Minute
-	rateLimitPause = 5 * time.Minute
-	defaultWindow  = 5 * time.Hour // fallback when the API omits the window length
-	readTimeout    = 30 * time.Second
-	triggerTimeout = 3 * time.Minute
+	postPingGrace     = 15 * time.Second // wait after a ping before re-reading usage
+	minBackoff        = 30 * time.Second
+	maxBackoff        = 10 * time.Minute
+	rateLimitPause    = 5 * time.Minute
+	defaultWindow     = 5 * time.Hour // fallback when the API omits the window length
+	readTimeout       = 30 * time.Second
+	triggerTimeout    = 3 * time.Minute
+	maxVerifyFailures = 3 // consecutive Trigger()-verification failures before giving up and waiting for the next natural window cycle
 )
 
 // Target pairs a provider with its scheduling options.
@@ -107,6 +108,8 @@ func (s *Scheduler) Run(ctx context.Context) {
 func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 	name := t.Provider.Name()
 	backoff := minBackoff
+	verifyBackoff := minBackoff      // escalates independently on Trigger()-verification failures
+	verifyFailures := 0              // consecutive verification failures; capped at maxVerifyFailures
 	aligned := t.AlignStart.IsZero() // whether the align gate has been passed
 	var lastPingAt time.Time
 
@@ -187,6 +190,13 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 
 		// If the 5h window is still running, wait until it resets, then ping.
 		if u.FiveHour.Active() {
+			// An active window is proof the previous ping (if any) actually
+			// landed, even if an earlier verification read caught it too
+			// early. Reset the verify-failure streak so a stale count from
+			// a prior episode can't trip the cap on this episode's first
+			// failure.
+			verifyFailures = 0
+			verifyBackoff = minBackoff
 			wait := u.FiveHour.Remaining() + s.cfg.ResetBuffer.Duration
 			s.log.Printf("[%s] 5h window active (%.0f%%), next ping at %s (in %s)",
 				name, u.FiveHour.UsedPercent,
@@ -277,15 +287,38 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 		vu, verr := t.Provider.ReadUsage(vctx)
 		vcancel()
 		if verr != nil || !vu.FiveHour.Active() {
-			lastPingAt = time.Time{} // unverified — don't block the next attempt for a full window
-			s.log.Printf("[%s] ping verification failed: window not active after ping (retry in %s)", name, backoff)
-			s.live.set(name, "ping unverified — retrying", time.Now().Add(backoff))
-			if !sleepCtx(ctx, backoff) {
+			verifyFailures++
+			wait := verifyBackoff
+			capped := verifyFailures >= maxVerifyFailures
+			switch {
+			case capped:
+				// Trigger() keeps claiming success without ever opening a
+				// window (e.g. stuck behind a login prompt). Stop hammering
+				// it: leave lastPingAt as-is so the duplicate-ping guard
+				// above enforces a full natural-window wait before the next
+				// attempt, instead of retrying every backoff cycle forever.
+				s.log.Printf("[%s] %d consecutive verification failures — pausing retries until the next natural window cycle", name, verifyFailures)
+			case verr != nil:
+				s.log.Printf("[%s] ping verification read failed: %v (retry in %s)", name, verr, wait)
+			default:
+				s.log.Printf("[%s] ping verification failed: window not active after ping (retry in %s)", name, wait)
+			}
+			if capped {
+				verifyFailures = 0
+				verifyBackoff = minBackoff
+				s.live.set(name, "ping unverified — pausing for natural cycle", time.Time{})
+			} else {
+				lastPingAt = time.Time{} // unverified — don't block the next attempt for a full window
+				verifyBackoff = nextBackoff(verifyBackoff)
+				s.live.set(name, "ping unverified — retrying", time.Now().Add(wait))
+			}
+			if !sleepCtx(ctx, wait) {
 				return
 			}
-			backoff = nextBackoff(backoff)
 			continue
 		}
+		verifyFailures = 0
+		verifyBackoff = minBackoff
 		backoff = minBackoff
 		s.log.Printf("[%s] window verified active", name)
 	}

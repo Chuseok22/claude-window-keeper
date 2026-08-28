@@ -7,7 +7,6 @@
 
 | # | 제목 | 요약 |
 |---|---|---|
-| [#1](https://github.com/Chuseok22/claude-window-keeper/issues/1) | scheduler 재시도/backoff 보강 | `Trigger()` 검증 실패가 반복돼도 backoff가 escalate 안 됨 — 최악의 경우 quota를 계속 태우는 재시도 루프 가능 |
 | [#2](https://github.com/Chuseok22/claude-window-keeper/issues/2) | 컨테이너 `--restart` 정책 없음 | NAS 재부팅/크래시 시 다음 `main` push 전까지 데몬이 안 살아남 |
 | [#3](https://github.com/Chuseok22/claude-window-keeper/issues/3) | 리브랜딩 잔재 정리 | `config init`이 생성하는 파일에 "limitping" 문구, 죽은 `ContinuePrompt` 필드 등 |
 | [#4](https://github.com/Chuseok22/claude-window-keeper/issues/4) | 문서 보완 | README에 DockerHub private 요구사항, 로컬 `.env` 주의사항 누락 |
@@ -29,6 +28,23 @@
 - UID(1001)/NAS 볼륨(root 소유) 불일치로 자격증명 읽기/쓰기가 조용히 실패하던 문제 → README에 `chown`
   안내 추가.
 - 자격증명 write-back 에러가 로그도 없이 무시되던 문제 → `internal/auth/claude.go`, `codex.go`에 로깅 추가.
+
+## 2026-08-26 fix: scheduler 검증-실패 backoff/cap
+
+**[#1](https://github.com/Chuseok22/claude-window-keeper/issues/1) scheduler 재시도/backoff 보강**: 검증
+실패(`Trigger()`가 err==nil을 반환했지만 postPingGrace 후에도 5h 창이 안 열린 경우) 시 늘린 `backoff`가 루프
+상단의 `ReadUsage` 성공 시 무조건 `minBackoff`로 리셋되던 버그를 고쳤습니다. `internal/scheduler/scheduler.go`의
+`runTarget`에 검증 실패 전용 `verifyBackoff`(공용 `backoff`와 분리되어 리셋되지 않음)와 연속 실패
+카운터(`verifyFailures`)를 추가: `maxVerifyFailures`(3회) 미만이면 기존처럼 즉시 재시도를 허용하되 이제
+30s→60s→120s로 실제 escalate하고, 3회에 도달하면 `lastPingAt`을 리셋하지 않아 기존 "중복 핑 방지" 가드가
+자연스럽게 발동해 다음 자연 창 주기(보통 5h)까지 대기하도록 함(알림은 보내지 않고 로그만 남김). fable5
+최종 리뷰에서 나온 후속 수정: (1) 5h 창이 다시 활성으로 관측되는 시점에 `verifyFailures`/`verifyBackoff`를
+리셋해서, 지연 반영된 검증 성공이 다음 에피소드의 카운트에 잘못 이어붙는 걸 막음, (2) cap 도달 회차의
+로그/라이브 상태 문구가 "재시도 예정"처럼 보이지 않도록 분리. 부수적으로 `verr != nil`(읽기 자체 실패)과
+`!vu.FiveHour.Active()`(창이 안 열림) 로그 메시지도 구분함. 회귀 테스트:
+`TestRunTarget_VerifyFailureCap_StopsRetriggeringAfterMaxFailures`(cap이 실제로 재시도를 막는지까지
+검증하도록 대기시간을 보강함 — 초기 버전은 3~4번째 트리거 사이 최소 간격보다 짧게 대기해서 cap 유무를
+구분하지 못하는 공허한 단언이었음, fable5 리뷰에서 발견).
 
 ## 작업 시작 전 체크
 
