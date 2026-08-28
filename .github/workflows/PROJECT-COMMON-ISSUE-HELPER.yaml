@@ -24,7 +24,7 @@ on:
 # git/refs API 쓰기 권한이 필요하므로 contents를 write로 올려야 한다.
 permissions:
   issues: write
-  contents: read
+  contents: write
 
 jobs:
   issue-helper:
