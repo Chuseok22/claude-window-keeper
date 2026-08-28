@@ -29,3 +29,6 @@ report/
 .report/
 superpowers/
 .superpowers/
+
+# claude code git worktrees
+.claude/worktrees/
