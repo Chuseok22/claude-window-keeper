@@ -31,7 +31,14 @@
 | `ENABLE_VOLUME_MOUNT` | `"true"` | |
 | `VOLUME_HOST_PATH` | `/volume1/project/claude-window-keeper/home` | NAS 쪽 실제 경로 |
 | `VOLUME_CONTAINER_PATH` | `/home/keeper` | 컨테이너의 `$HOME` 전체(Dockerfile의 `ENV HOME=/home/keeper`와 일치) — `.claude`/`.codex`가 이 아래 서브디렉터리로 자동 영속화됨. 볼륨 쌍을 하나만 지원하는 스크립트 제약 때문에 둘을 따로 마운트하는 대신 `$HOME` 전체를 마운트하는 방식을 씀 |
-| `CONTAINER_INTERNAL_PORT`/`DEPLOY_PORT` | 그대로 둠 | 아무 것도 안 듣지만 무해함(스크립트 로직을 안 고치려고 그냥 둠) — [Issue #2](https://github.com/Chuseok22/claude-window-keeper/issues/2) |
+| `--restart unless-stopped` (docker run 플래그, env 변수 아님) | 추가됨 | 컨테이너가 크래시하거나 NAS가 재부팅돼도 자동 재시작됨 — 수동 `docker stop`은 존중(`always`가 아니라 `unless-stopped`) — [Issue #2](https://github.com/Chuseok22/claude-window-keeper/issues/2) 수정 완료 |
+
+**포트 관련 env 변수(`CONTAINER_INTERNAL_PORT`, `DEPLOY_PORT`)는 완전히 제거됐습니다** — 이 데몬은 포트를
+전혀 안 열기 때문에, `docker run`의 `-p` 옵션 자체를 뺐습니다
+([Issue #14](https://github.com/Chuseok22/claude-window-keeper/issues/14) 포트 부분 수정 완료). 같은 이슈가
+지적한 `.env` 이미지 baking 방식은 검토 후 **현행 유지**로 결정했습니다 — DockerHub 저장소를 private으로 유지하는
+것은 여전히 배포자가 첫 배포 전에 직접 확인해야 하는 수동 절차입니다(자동 검증 없음, 의도적으로 문서화도 추가하지
+않기로 결정 — 아래 `50-known-issues.md`의 fix 기록 참고).
 
 **주의**: `version.yml`의 `deploy.go.VOLUME_HOST_PATH`/`VOLUME_CONTAINER_PATH`는 위 표와 값이 **다릅니다**(아직
 옛날 `/mnt/__PROJECT_NAME__` 형태 그대로) — 이건 마법사가 별도로 기억하는 메타데이터라서 워크플로우 파일 자체를
