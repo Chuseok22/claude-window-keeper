@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -626,6 +627,28 @@ func TestRun_ConcurrentAuthNotifiedWrites_NoRace(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not stop after cancellation")
+	}
+}
+
+// TestRun_LogsDiscordAlertingStatus proves that Run logs whether Discord
+// alerting is enabled or disabled at startup, so a misconfigured deploy
+// (DISCORD_WEBHOOK_URL unset) is diagnosable from the logs instead of being
+// discovered only when an auth-expiry alert never arrives.
+func TestRun_LogsDiscordAlertingStatus(t *testing.T) {
+	var buf bytes.Buffer
+	s := New(testConfig(), []Target{}, false, false, &buf)
+	s.notifyCfg = notify.Config{WebhookURL: "http://discord.test/webhook"}
+	s.Run(context.Background())
+	if got := buf.String(); !strings.Contains(got, "discord alerting: enabled") {
+		t.Fatalf("log output = %q, want it to contain %q", got, "discord alerting: enabled")
+	}
+
+	buf.Reset()
+	s = New(testConfig(), []Target{}, false, false, &buf)
+	s.notifyCfg = notify.Config{}
+	s.Run(context.Background())
+	if got := buf.String(); !strings.Contains(got, "discord alerting: disabled (DISCORD_WEBHOOK_URL not set)") {
+		t.Fatalf("log output = %q, want it to contain %q", got, "discord alerting: disabled (DISCORD_WEBHOOK_URL not set)")
 	}
 }
 

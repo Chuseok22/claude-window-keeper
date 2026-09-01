@@ -81,6 +81,11 @@ func (s *Scheduler) Run(ctx context.Context) {
 	}
 	s.log.Printf("watching %v (weekly_threshold=%.2f, reset_buffer=%s, dry_run=%t)",
 		names, s.cfg.WeeklyThreshold, s.cfg.ResetBuffer.Duration, s.dryRun)
+	if s.notifyCfg.Enabled() {
+		s.log.Printf("discord alerting: enabled")
+	} else {
+		s.log.Printf("discord alerting: disabled (DISCORD_WEBHOOK_URL not set)")
+	}
 
 	var liveWG sync.WaitGroup
 	if s.live.enabled {
