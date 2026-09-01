@@ -1,7 +1,21 @@
 # Changelog
 
-**현재 버전:** 0.10.6  
-**마지막 업데이트:** 2026-09-01T07:45:47Z  
+**현재 버전:** 0.10.7  
+**마지막 업데이트:** 2026-09-01T11:46:13Z  
+
+---
+
+## [0.10.7] - 2026-09-01
+
+**🐛 수정**
+- reject non-HTTPS Discord webhooks and stop leaking the URL in error logs
+- log Discord alerting enabled/disabled state at watch startup
+- surface Discord webhook send failures instead of swallowing them
+
+**📝 문서**
+- clarify Discord alert dedupe is per-process, and the disabled state is logged
+- update internal design docs for Discord alerting, drop known-issues file
+- update deploy-facing docs for the Discord webhook alert channel
 
 ---
 
