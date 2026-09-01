@@ -38,6 +38,14 @@ var (
 	heldLocks   = make(map[string]bool)
 )
 
+// lockRemoveRetryBackoff and maxLockRemoveRetries bound how long
+// acquireWatchLock will retry deleting a stale/corrupt watch.lock file
+// before giving up. Overridable in tests.
+var (
+	lockRemoveRetryBackoff = 200 * time.Millisecond
+	maxLockRemoveRetries   = 5
+)
+
 func markLockHeld(path string) {
 	heldLocksMu.Lock()
 	heldLocks[path] = true
@@ -66,6 +74,7 @@ func acquireWatchLock(out io.Writer, provider string, dryRun bool) (func(), erro
 		return nil, err
 	}
 	path := filepath.Join(dir, watchLockName)
+	removeFailures := 0
 
 	for {
 		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
@@ -109,7 +118,12 @@ func acquireWatchLock(out io.Writer, provider string, dryRun bool) (func(), erro
 			return nil, watchAlreadyRunningError(st)
 		}
 		if rerr := os.Remove(path); rerr != nil {
-			logger.Printf("watch.lock 삭제 실패: %v", rerr)
+			removeFailures++
+			logger.Printf("watch.lock 삭제 실패 (%d/%d): %v", removeFailures, maxLockRemoveRetries, rerr)
+			if removeFailures >= maxLockRemoveRetries {
+				return nil, fmt.Errorf(localizedText().watchLockRemoveFailedFmt, path, removeFailures, rerr)
+			}
+			time.Sleep(lockRemoveRetryBackoff)
 		}
 	}
 }
