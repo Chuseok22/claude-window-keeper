@@ -1,7 +1,15 @@
 # Changelog
 
-**현재 버전:** 0.10.5  
-**마지막 업데이트:** 2026-09-01T06:08:56Z  
+**현재 버전:** 0.10.6  
+**마지막 업데이트:** 2026-09-01T07:45:47Z  
+
+---
+
+## [0.10.6] - 2026-09-01
+
+**🐛 수정**
+- cap watch.lock removal retries with backoff instead of busy-looping
+- thread a writer into acquireWatchLock for stale-lock-removal logging
 
 ---
 

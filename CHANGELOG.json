@@ -1,13 +1,32 @@
 {
   "metadata": {
-    "lastUpdated": "2026-09-01T06:08:56Z",
-    "currentVersion": "0.10.5",
+    "lastUpdated": "2026-09-01T07:45:47Z",
+    "currentVersion": "0.10.6",
     "projectTypes": [
       "go"
     ],
-    "totalReleases": 6
+    "totalReleases": 7
   },
   "releases": [
+    {
+      "version": "0.10.6",
+      "project_types": [
+        "go"
+      ],
+      "date": "2026-09-01",
+      "pr_number": null,
+      "raw_summary": "## [0.10.6]\n\n### 🐛 수정\n- cap watch.lock removal retries with backoff instead of busy-looping\n- thread a writer into acquireWatchLock for stale-lock-removal logging",
+      "parsed_changes": {
+        "수정": {
+          "title": "🐛 수정",
+          "items": [
+            "cap watch.lock removal retries with backoff instead of busy-looping",
+            "thread a writer into acquireWatchLock for stale-lock-removal logging"
+          ]
+        }
+      },
+      "parse_method": "markdown"
+    },
     {
       "version": "0.10.5",
       "project_types": [
