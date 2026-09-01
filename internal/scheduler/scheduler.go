@@ -68,7 +68,7 @@ func New(cfg config.Config, targets []Target, dryRun, live bool, out io.Writer) 
 		dryRun:       dryRun,
 		log:          log.New(status, "", log.LstdFlags),
 		live:         status,
-		notifyCfg:    notify.Config{BotToken: os.Getenv("TELEGRAM_BOT_TOKEN"), ChatID: os.Getenv("TELEGRAM_CHAT_ID")},
+		notifyCfg:    notify.Config{WebhookURL: os.Getenv("DISCORD_WEBHOOK_URL")},
 		authNotified: make(map[string]bool),
 	}
 }
@@ -81,6 +81,11 @@ func (s *Scheduler) Run(ctx context.Context) {
 	}
 	s.log.Printf("watching %v (weekly_threshold=%.2f, reset_buffer=%s, dry_run=%t)",
 		names, s.cfg.WeeklyThreshold, s.cfg.ResetBuffer.Duration, s.dryRun)
+	if s.notifyCfg.Enabled() {
+		s.log.Printf("discord alerting: enabled")
+	} else {
+		s.log.Printf("discord alerting: disabled (DISCORD_WEBHOOK_URL not set)")
+	}
 
 	var liveWG sync.WaitGroup
 	if s.live.enabled {
@@ -352,16 +357,19 @@ func (s *Scheduler) redeemExpiringCredit(ctx context.Context, t Target, u *usage
 	return false
 }
 
-// notifyAuthExpired sends a Telegram alert the first time name's refresh
+// notifyAuthExpired sends a Discord alert the first time name's refresh
 // token is seen to be definitively rejected, then stays silent until a
-// successful ReadUsage resets the flag (see runTarget).
+// successful ReadUsage resets the flag (see runTarget). A failed send is
+// logged, not retried — a missed alert must never block the watch loop.
 func (s *Scheduler) notifyAuthExpired(name string, err error) {
 	if s.authWasNotified(name) {
 		return
 	}
 	s.setAuthNotified(name, true)
-	notify.Notify(s.notifyCfg, name+": 인증이 만료됐습니다 — 다시 로그인해 주세요",
-		"자격증명 파일을 갱신할 때까지 재시도만 계속합니다.\n"+err.Error())
+	if nerr := notify.Notify(s.notifyCfg, name+": 인증이 만료됐습니다 — 다시 로그인해 주세요",
+		"자격증명 파일을 갱신할 때까지 재시도만 계속합니다.\n"+err.Error()); nerr != nil {
+		s.log.Printf("[%s] discord 알림 전송 실패: %v", name, nerr)
+	}
 }
 
 // authWasNotified reports whether name's auth-expired alert has already been

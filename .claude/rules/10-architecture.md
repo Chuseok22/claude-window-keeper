@@ -8,7 +8,7 @@ internal/
 ├── auth/       OAuth 자격증명 로드/갱신 (Claude Code/Codex CLI와 자격증명 파일 공유)
 ├── cli/        cobra 커맨드 정의, i18n(한국어 텍스트), watch 락
 ├── config/     TOML 설정 로드/기본값
-├── notify/     Telegram Bot API 알림 (유일한 알림 채널)
+├── notify/     Discord Webhook 알림 (유일한 알림 채널)
 ├── pricing/    토큰 비용 계산 (status/ping 출력용)
 ├── provider/   Provider 인터페이스 + Claude/Codex/Spark 구현
 ├── scheduler/  watch 루프의 핵심 — window 감시, 트리거, 검증, 알림 연결
@@ -38,7 +38,7 @@ type Provider interface {
 - **`provider.ClaudeSubscriptionAccessError`** (`internal/provider/claude.go`) — 조직/계정이 구독 자체를
   비활성화한 경우. 토큰은 멀쩡한데 접근이 막힌 상태.
 - **`provider.AuthExpiredError`** (`internal/provider/provider.go`) — refresh token이 **완전히 죽어서**
-  (`auth.ErrRefreshRejected`, HTTP 400/401 응답으로 판정) 사람이 재로그인해야 하는 상태. **이것만** Telegram
+  (`auth.ErrRefreshRejected`, HTTP 400/401 응답으로 판정) 사람이 재로그인해야 하는 상태. **이것만** Discord
   알림을 트리거합니다.
 
 ```go
@@ -55,7 +55,7 @@ type Scheduler struct {
     dryRun       bool
     log          *log.Logger
     live         *liveStatus
-    notifyCfg    notify.Config          // os.Getenv("TELEGRAM_BOT_TOKEN"/"...CHAT_ID")로 구성, config.toml 아님
+    notifyCfg    notify.Config          // os.Getenv("DISCORD_WEBHOOK_URL")로 구성, config.toml 아님
     authMu       sync.Mutex             // authNotified 보호 — target별 goroutine이 동시에 씀
     authNotified map[string]bool
 }
@@ -74,21 +74,21 @@ type Scheduler struct {
    불러서 `FiveHour.Active()`가 진짜 true인지 확인합니다(PTY 자동화가 로그인 프롬프트 같은 걸 성공으로 오인할
    수 있어서 생긴 검증 로직). 이 로직에 재시도 상한이 없는 게 [Issue #1](https://github.com/Chuseok22/claude-window-keeper/issues/1)로 남아있습니다.
 
-## Telegram 알림 (`internal/notify/notify.go`)
+## Discord 알림 (`internal/notify/notify.go`)
 
 ```go
-type Config struct{ BotToken, ChatID string }
+type Config struct{ WebhookURL string }
 func (c Config) Enabled() bool
-func Notify(cfg Config, title, message string)  // 실패해도 절대 에러 안 냄, 10초 타임아웃
+func Notify(cfg Config, title, message string) error  // 실패 시 error 반환(재시도는 안 함), 10초 타임아웃
 ```
 
-`config.toml`이 아니라 **환경변수**(`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`)에서 읽습니다. 이유:
-Docker/CI 배포 파이프라인이 `.env` 기반 시크릿 전달을 이미 갖고 있어서 거기 맞춘 설계입니다 (자세한 내용은
-`20-cicd-deployment.md`). **`config.toml`에 텔레그램 관련 필드를 추가하려는 시도가 있으면 의도적으로
-피한 설계임을 알려주세요.**
+`config.toml`이 아니라 **환경변수**(`DISCORD_WEBHOOK_URL`)에서 읽습니다. 이유: Docker/CI 배포 파이프라인이
+`.env` 기반 시크릿 전달을 이미 갖고 있어서 거기 맞춘 설계입니다 (자세한 내용은 `20-cicd-deployment.md`).
+**`config.toml`에 Discord 관련 필드를 추가하려는 시도가 있으면 의도적으로 피한 설계임을 알려주세요.**
 
 알림은 인증 완전 실패 하나만, 같은 provider가 실패 상태인 동안 최초 1회만 보냅니다(`authNotified` map으로
-추적, `ReadUsage` 성공 시 리셋).
+추적, `ReadUsage` 성공 시 리셋). 실패한 전송은 `Notify()`가 반환한 error를 `notifyAuthExpired` 호출부가
+`s.log`에 남기며, 재시도는 하지 않습니다 — watch 루프를 막지 않는 게 우선입니다.
 
 ## 자격증명 로딩 (`internal/auth/`)
 
