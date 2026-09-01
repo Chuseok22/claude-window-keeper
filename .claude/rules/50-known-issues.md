@@ -7,7 +7,6 @@
 
 | # | 제목 | 요약 |
 |---|---|---|
-| [#2](https://github.com/Chuseok22/claude-window-keeper/issues/2) | 컨테이너 `--restart` 정책 없음 | NAS 재부팅/크래시 시 다음 `main` push 전까지 데몬이 안 살아남 |
 | [#3](https://github.com/Chuseok22/claude-window-keeper/issues/3) | 리브랜딩 잔재 정리 | `config init`이 생성하는 파일에 "limitping" 문구, 죽은 `ContinuePrompt` 필드 등 |
 | [#4](https://github.com/Chuseok22/claude-window-keeper/issues/4) | 문서 보완 | README에 DockerHub private 요구사항, 로컬 `.env` 주의사항 누락 |
 | [#5](https://github.com/Chuseok22/claude-window-keeper/issues/5) | 잡다한 개선사항 | 버전 하드코딩(ldflags 미배선), 45초짜리 느린 테스트, 미사용 curl, env-var 배선 테스트 공백 등 |
@@ -45,6 +44,26 @@
 `TestRunTarget_VerifyFailureCap_StopsRetriggeringAfterMaxFailures`(cap이 실제로 재시도를 막는지까지
 검증하도록 대기시간을 보강함 — 초기 버전은 3~4번째 트리거 사이 최소 간격보다 짧게 대기해서 cap 유무를
 구분하지 못하는 공허한 단언이었음, fable5 리뷰에서 발견).
+
+## 2026-08-31 fix: 컨테이너 재시작 정책 추가 + 불필요한 포트 매핑 제거
+
+**[#2](https://github.com/Chuseok22/claude-window-keeper/issues/2) 컨테이너 재시작 정책**: `PROJECT-GO-SIMPLE-CICD.yaml`의
+`docker run -d` 커맨드에 `--restart unless-stopped`를 추가. NAS 재부팅이나 컨테이너 크래시 시 다음 `main`
+push까지 기다릴 필요 없이 Docker가 자동으로 재시작한다. `unless-stopped`를 선택한 이유: 사람이 디버깅을 위해
+`docker stop`으로 의도적으로 멈춘 경우까지 재부팅 후 되살리는 `always`보다, 그 의도를 존중하는 게 맞다고 판단.
+`internal/cli/watch_lock.go`의 stale-PID 판별 로직(주석 참고: "a stale lock left by a *previous, now-dead*
+PID-1 process")이 이미 "같은 PID 1이 재사용되는" 시나리오를 정확히 처리하고 있어서, `--restart`로 인한 워치락
+충돌은 없음 — Go 코드 변경 없이 리뷰만으로 확인됨(재배포 시 새 컨테이너가 뜨는 것과 동일한 패턴).
+
+**[#14](https://github.com/Chuseok22/claude-window-keeper/issues/14) 포트 매핑 제거 (부분 해결)**: 이 데몬은
+HTTP 서버가 없어 아무 포트도 안 듣는데도 `docker run`에 `-p ${DEPLOY_PORT}:${CONTAINER_INTERNAL_PORT}`가
+붙어 있었던 것을 발견 — `-p` 옵션과 `DEPLOY_PORT`/`CONTAINER_INTERNAL_PORT` env 변수, 관련 로그 출력(배포
+결과 요약의 "접속 URL" 줄 등)을 전부 제거했다.
+
+이슈 #14의 나머지 절반인 "`.env`가 Docker 이미지에 baked-in되는 방식 재검토"는 **브레인스토밍 끝에 현행 유지로
+결정**했다 — 이미지에 굽는 방식을 그대로 두고, 추가 문서화(체크리스트 명문화)나 CI에서 DockerHub private
+여부를 자동 검증하는 것도 하지 않기로 확정. DockerHub 저장소가 private이어야 한다는 전제는 여전히 배포자가
+**첫 배포 전에 수동으로 직접 확인**해야 하는 절차로 남아있다(자동화된 안전장치 없음 — 의도적 결정).
 
 ## 작업 시작 전 체크
 

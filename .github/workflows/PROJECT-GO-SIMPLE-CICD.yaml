@@ -21,9 +21,7 @@
 # 🔧 환경변수 설정 (env 섹션에서 설정)
 # ===================================================================
 #
-# 🌐 포트 및 컨테이너:
-# CONTAINER_INTERNAL_PORT: Go 앱 내부 포트 (기본: 8080)
-# DEPLOY_PORT: 배포 포트
+# 🐳 컨테이너:
 # CONTAINER_NAME: 컨테이너 이름 (기본: PROJECT_NAME)
 #
 # 📦 볼륨 마운트:
@@ -67,9 +65,6 @@ env:
   # 프로젝트 고유 식별자
   PROJECT_NAME: "claude-window-keeper"
 
-  # 🌐 포트 설정
-  DEPLOY_PORT: "8087"
-
   # 🐳 컨테이너 이름 설정 (비워두면 PROJECT_NAME 사용)
   CONTAINER_NAME: ""
 
@@ -87,9 +82,6 @@ env:
   SSH_PORT: "2022"
   SSH_COMMAND_TIMEOUT: "600s"  # SSH 명령 실행 타임아웃
   SSH_CONNECTION_TIMEOUT: "60s"  # SSH 연결 타임아웃
-
-  # 🌐 컨테이너 포트 설정
-  CONTAINER_INTERNAL_PORT: "8080"  # Go 앱 내부 포트
 
   # ⏱️ 헬스체크 설정
   HEALTHCHECK_WAIT_SECONDS: "10"  # 컨테이너 초기화 대기 시간 (초)
@@ -220,9 +212,8 @@ jobs:
             PROJECT_NAME="${{ env.PROJECT_NAME }}"
 
             # ============================================================
-            # 포트 및 컨테이너명 설정
+            # 컨테이너명 설정
             # ============================================================
-            PORT=${{ env.DEPLOY_PORT }}
 
             # 컨테이너 이름 설정
             if [ -z "${{ env.CONTAINER_NAME }}" ]; then
@@ -240,7 +231,6 @@ jobs:
             echo "  - 브랜치: $BRANCH"
             echo "  - 프로젝트: $PROJECT_NAME"
             echo "  - 컨테이너 이름: $CONTAINER_NAME"
-            echo "  - 포트: $PORT"
             echo "  - Docker 이미지: ${{ secrets.DOCKERHUB_USERNAME }}/${PROJECT_NAME}:${BRANCH}"
 
             # ============================================================
@@ -269,10 +259,11 @@ jobs:
             echo "🚀 새로운 컨테이너 $CONTAINER_NAME 실행 중..."
 
             # Docker 컨테이너 실행
-            # - 포트 매핑: ${PORT}:${{ env.CONTAINER_INTERNAL_PORT }} (외부:내부)
+            # - 재시작 정책: unless-stopped (NAS 재부팅/크래시 시 자동 복구, 수동 정지는 존중 — Issue #2)
             # - 시간대: Asia/Seoul
             # - 볼륨 마운트: 로컬 시간 동기화 및 프로젝트 데이터
             # ⚠️ .env 파일은 이미 Docker 이미지에 포함되어 있습니다
+            # ℹ️ 이 데몬은 HTTP 서버가 없어 포트를 노출하지 않습니다 (Issue #14)
 
             # 볼륨 마운트 옵션 구성
             VOLUME_OPTS="-v /etc/localtime:/etc/localtime:ro"
@@ -289,7 +280,7 @@ jobs:
             fi
 
             SUDO docker run -d \
-              -p ${PORT}:${{ env.CONTAINER_INTERNAL_PORT }} \
+              --restart unless-stopped \
               --name $CONTAINER_NAME \
               -e TZ=Asia/Seoul \
               $VOLUME_OPTS \
@@ -313,12 +304,12 @@ jobs:
             # 2단계: HTTP 엔드포인트 체크 (설정된 경우)
             HEALTHCHECK_SUCCESS=false
             if [ -n "${{ env.HEALTHCHECK_PATH }}" ]; then
-              echo "🌐 HTTP 헬스체크 시작: http://localhost:${PORT}${{ env.HEALTHCHECK_PATH }}"
+              echo "🌐 HTTP 헬스체크 시작: http://localhost${{ env.HEALTHCHECK_PATH }}"
 
               for i in $(seq 1 ${{ env.HEALTHCHECK_MAX_RETRIES }}); do
                 echo "  시도 $i/${{ env.HEALTHCHECK_MAX_RETRIES }}..."
 
-                HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${PORT}${{ env.HEALTHCHECK_PATH }} || echo "000")
+                HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost${{ env.HEALTHCHECK_PATH }} || echo "000")
 
                 if [ "$HTTP_CODE" = "200" ]; then
                   echo "✅ HTTP 헬스체크 성공 (응답 코드: $HTTP_CODE)"
@@ -355,7 +346,6 @@ jobs:
                 echo "  - 검색 패턴: ${{ env.HEALTHCHECK_LOG_PATTERN }}"
                 echo "  - 컨테이너: $CONTAINER_NAME"
                 echo "  - 이미지: ${{ secrets.DOCKERHUB_USERNAME }}/${PROJECT_NAME}:${BRANCH}"
-                echo "  - 포트: ${PORT}:${{ env.CONTAINER_INTERNAL_PORT }}"
                 echo "  - 볼륨: $VOLUME_OPTS"
                 echo ""
                 echo "📋 컨테이너 로그 (최근 50줄):"
@@ -378,7 +368,4 @@ jobs:
             echo "  🎯 프로젝트: $PROJECT_NAME"
             echo "  🌿 브랜치: $BRANCH"
             echo "  🐳 컨테이너: $CONTAINER_NAME"
-            echo "  🌐 포트: $PORT"
             echo "  ⏰ 배포 시간: $(date '+%Y-%m-%d %H:%M:%S')"
-            echo ""
-            echo "🔗 접속 URL: http://${{ secrets.SERVER_HOST }}:${PORT}"
