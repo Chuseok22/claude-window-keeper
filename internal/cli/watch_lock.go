@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -36,6 +38,14 @@ var (
 	heldLocks   = make(map[string]bool)
 )
 
+// lockRemoveRetryBackoff and maxLockRemoveRetries bound how long
+// acquireWatchLock will retry deleting a stale/corrupt watch.lock file
+// before giving up. Overridable in tests.
+var (
+	lockRemoveRetryBackoff = 200 * time.Millisecond
+	maxLockRemoveRetries   = 5
+)
+
 func markLockHeld(path string) {
 	heldLocksMu.Lock()
 	heldLocks[path] = true
@@ -54,7 +64,8 @@ func clearLockHeld(path string) {
 	heldLocksMu.Unlock()
 }
 
-func acquireWatchLock(provider string, dryRun bool) (func(), error) {
+func acquireWatchLock(out io.Writer, provider string, dryRun bool) (func(), error) {
+	logger := log.New(out, "", log.LstdFlags)
 	dir, err := config.Dir()
 	if err != nil {
 		return nil, err
@@ -63,6 +74,7 @@ func acquireWatchLock(provider string, dryRun bool) (func(), error) {
 		return nil, err
 	}
 	path := filepath.Join(dir, watchLockName)
+	removeFailures := 0
 
 	for {
 		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
@@ -105,7 +117,14 @@ func acquireWatchLock(provider string, dryRun bool) (func(), error) {
 		if foreignAlive || selfHeld {
 			return nil, watchAlreadyRunningError(st)
 		}
-		_ = os.Remove(path)
+		if rerr := os.Remove(path); rerr != nil {
+			removeFailures++
+			logger.Printf("watch.lock 삭제 실패 (%d/%d): %v", removeFailures, maxLockRemoveRetries, rerr)
+			if removeFailures >= maxLockRemoveRetries {
+				return nil, fmt.Errorf(localizedText().watchLockRemoveFailedFmt, path, removeFailures, rerr)
+			}
+			time.Sleep(lockRemoveRetryBackoff)
+		}
 	}
 }
 

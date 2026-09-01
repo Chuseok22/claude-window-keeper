@@ -58,11 +58,12 @@ type cliText struct {
 	pingFailedFmt   string // provider, elapsed, error
 	pingSuccessFmt  string // provider, elapsed, usage suffix
 
-	watchShort             string
-	watchLong              string
-	watchDryRunFlag        string
-	watchLiveFlag          string
-	watchAlreadyRunningFmt string
+	watchShort               string
+	watchLong                string
+	watchDryRunFlag          string
+	watchLiveFlag            string
+	watchAlreadyRunningFmt   string
+	watchLockRemoveFailedFmt string
 
 	// `redeem` reset-credit strings.
 	redeemShort         string
@@ -197,9 +198,10 @@ var koreanText = cliText{
   claude-window-keeper w claude
   claude-window-keeper watch --live
   claude-window-keeper watch --dry-run`,
-	watchDryRunFlag:        "전송하지 않고 트리거될 시점만 로그로 기록",
-	watchLiveFlag:          "감시 중 실시간 하트비트/상태 라인 표시 (전력 소모 증가)",
-	watchAlreadyRunningFmt: "watch가 이미 실행 중입니다 (pid %d, provider %s%s, 시작 시각 %s). 새로 시작하기 전에 기존 watcher를 먼저 중지하세요",
+	watchDryRunFlag:          "전송하지 않고 트리거될 시점만 로그로 기록",
+	watchLiveFlag:            "감시 중 실시간 하트비트/상태 라인 표시 (전력 소모 증가)",
+	watchAlreadyRunningFmt:   "watch가 이미 실행 중입니다 (pid %d, provider %s%s, 시작 시각 %s). 새로 시작하기 전에 기존 watcher를 먼저 중지하세요",
+	watchLockRemoveFailedFmt: "정체된 watch.lock 파일 삭제에 실패했습니다 (%s, %d회 시도, 마지막 오류: %v). 볼륨 소유권(chown)이 컨테이너 실행 유저와 맞지 않을 수 있습니다 — README의 NAS 볼륨 권한 안내를 확인하세요",
 
 	redeemShort: "적립된 Codex 요청 제한 리셋 크레딧을 지금 사용",
 	redeemLong: `'claude-window-keeper status'에 표시된 Codex 리셋 크레딧 하나를 사용하여, 해당 크레딧이 적용 가능한 요청 제한 윈도우를 리셋합니다.

@@ -36,7 +36,7 @@ func newWatchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			release, err := acquireWatchLock(name, dryRun)
+			release, err := acquireWatchLock(cmd.OutOrStdout(), name, dryRun)
 			if err != nil {
 				return err
 			}
