@@ -28,7 +28,7 @@ for the full relationship. Scope has been narrowed to run as a single Docker con
   quota — only the deliberate trigger ping does.
 - **Triggers through the official CLIs.** No private/undocumented request shapes for the actual "start a
   session" step — it shells out to the same `claude` / `codex` binaries you'd run by hand.
-- **One alert, for one failure mode.** A Telegram message is sent only when a provider's OAuth refresh token is
+- **One alert, for one failure mode.** A Discord message is sent only when a provider's OAuth refresh token is
   outright rejected — i.e. you need to log back in on that provider. Everything else (rate limits, transient
   network errors) is handled silently by the retry/backoff logic in the watch loop.
 - **Three independent providers.** `claude` and `codex` are enabled by default; `spark` (a second Codex-backed
@@ -59,8 +59,11 @@ won't be able to read or write its own credentials:
 sudo chown -R 1001:1001 /volume1/project/claude-window-keeper/home
 ```
 
-Telegram alerting (sent once if a provider's OAuth refresh token is ever rejected outright) is configured via the
-`ENV_FILE` GitHub Secret — set `TELEGRAM_BOT_TOKEN=...` / `TELEGRAM_CHAT_ID=...` there, not in a local config file.
+Discord alerting (sent once if a provider's OAuth refresh token is ever rejected outright) is configured via the
+`ENV_FILE` GitHub Secret — set `DISCORD_WEBHOOK_URL=...` there, not in a local config file. If you're updating an
+existing deploy that used `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`, update the secret *before or at the same
+time as* deploying this version — otherwise alerting silently goes dark (the webhook URL is unset, so `Notify`
+treats itself as disabled) until you fix it.
 
 For local development, `docker build -t claude-window-keeper:local .` and `docker run --rm
 claude-window-keeper:local <command>` work without any of the above.
@@ -78,8 +81,9 @@ claude-window-keeper:local <command>` work without any of the above.
 4. **Verification.** Right after a trigger, the scheduler re-reads usage to confirm the window actually rolled
    over before going back to sleep, instead of trusting the trigger call blindly.
 5. **Auth failure alert.** If a provider's OAuth refresh token is rejected outright (not just rate-limited), the
-   watch loop sends one Telegram message via `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` and keeps looping — it
-   doesn't crash the daemon, and it doesn't re-alert every cycle for the same provider.
+   watch loop sends one Discord message via `DISCORD_WEBHOOK_URL` and keeps looping — it doesn't crash the
+   daemon, and it doesn't re-alert every cycle for the same provider. A failed send is logged and dropped, never
+   retried.
 
 ## Commands
 
@@ -100,6 +104,6 @@ README stays in English so it's easier to diff against the upstream
 
 Provider selection, prompts, models, and scheduling knobs (`weekly_threshold`, `reset_buffer`, `auto_redeem`, …)
 live in `config.toml` — see `claude-window-keeper config init` for a fully commented default, and
-`claude-window-keeper config path` for where it's read from. Telegram alerting is the one exception: it's read
-from the `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` environment variables only, never from `config.toml`, so it
-can be set as a deploy-time secret instead of a checked-in file.
+`claude-window-keeper config path` for where it's read from. Discord alerting is the one exception: it's read
+from the `DISCORD_WEBHOOK_URL` environment variable only, never from `config.toml`, so it can be set as a
+deploy-time secret instead of a checked-in file.

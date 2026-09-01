@@ -23,8 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=build /out/claude-window-keeper /usr/local/bin/claude-window-keeper
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
-# .env is baked into the image by design (spec Sec.9): TELEGRAM_BOT_TOKEN /
-# TELEGRAM_CHAT_ID are static secrets that never need runtime rewriting, and
+# .env is baked into the image by design (spec Sec.9): DISCORD_WEBHOOK_URL
+# is a static secret that never needs runtime rewriting, and
 # the DockerHub repo hosting this image stays private, so build-time baking
 # is acceptable here. CI (Task 15) writes .env into the build context from
 # the ENV_FILE secret immediately before `docker build` runs.
