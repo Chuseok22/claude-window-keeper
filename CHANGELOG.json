@@ -1,13 +1,38 @@
 {
   "metadata": {
-    "lastUpdated": "2026-08-28T08:19:54Z",
-    "currentVersion": "0.10.4",
+    "lastUpdated": "2026-09-01T06:08:56Z",
+    "currentVersion": "0.10.5",
     "projectTypes": [
       "go"
     ],
-    "totalReleases": 5
+    "totalReleases": 6
   },
   "releases": [
+    {
+      "version": "0.10.5",
+      "project_types": [
+        "go"
+      ],
+      "date": "2026-09-01",
+      "pr_number": null,
+      "raw_summary": "## [0.10.5]\n\n### 🐛 수정\n- add container restart policy, remove unused port mapping from CI/CD deploy\n\n### 📝 문서\n- record #2 restart-policy fix and #14 partial fix (port removal)\n- record restart-policy fix and port-var removal in CI/CD notes",
+      "parsed_changes": {
+        "수정": {
+          "title": "🐛 수정",
+          "items": [
+            "add container restart policy, remove unused port mapping from CI/CD deploy"
+          ]
+        },
+        "문서": {
+          "title": "📝 문서",
+          "items": [
+            "record #2 restart-policy fix and #14 partial fix (port removal)",
+            "record restart-policy fix and port-var removal in CI/CD notes"
+          ]
+        }
+      },
+      "parse_method": "markdown"
+    },
     {
       "version": "0.10.4",
       "project_types": [

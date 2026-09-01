@@ -1,7 +1,18 @@
 # Changelog
 
-**현재 버전:** 0.10.4  
-**마지막 업데이트:** 2026-08-28T08:19:54Z  
+**현재 버전:** 0.10.5  
+**마지막 업데이트:** 2026-09-01T06:08:56Z  
+
+---
+
+## [0.10.5] - 2026-09-01
+
+**🐛 수정**
+- add container restart policy, remove unused port mapping from CI/CD deploy
+
+**📝 문서**
+- record #2 restart-policy fix and #14 partial fix (port removal)
+- record restart-policy fix and port-var removal in CI/CD notes
 
 ---
 
