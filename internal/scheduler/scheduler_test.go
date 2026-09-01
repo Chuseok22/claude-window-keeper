@@ -457,9 +457,11 @@ func TestTriggerCost(t *testing.T) {
 
 // countingTransport is an http.RoundTripper that counts requests and answers
 // them locally with a 200 OK, so tests can observe how many times
-// notify.Notify actually attempted to send a Telegram message without any
-// real network access and without needing a cross-package test seam into
-// internal/notify (whose telegramBaseURL swap helper is unexported).
+// notify.Notify actually attempted to send a Discord webhook request
+// without any real network access — swapping the process-wide
+// http.DefaultClient here is simpler than routing a fake WebhookURL through
+// every call site, since several of these tests reach Notify indirectly
+// through Scheduler.Run/runTarget rather than calling it directly.
 type countingTransport struct {
 	mu    sync.Mutex
 	count int
@@ -483,7 +485,8 @@ func (rt *countingTransport) Count() int {
 }
 
 // swapDefaultHTTPClientForTest points the process-wide http.DefaultClient
-// (which notify.Notify sends through) at rt for the duration of the test.
+// (which notify.Notify sends the Discord webhook request through) at rt
+// for the duration of the test.
 func swapDefaultHTTPClientForTest(t *testing.T) *countingTransport {
 	t.Helper()
 	rt := &countingTransport{}
@@ -496,7 +499,7 @@ func swapDefaultHTTPClientForTest(t *testing.T) *countingTransport {
 func TestNotifyAuthExpired_OncePerEpisode_ThenResetOnSuccess(t *testing.T) {
 	rt := swapDefaultHTTPClientForTest(t)
 	s := &Scheduler{
-		notifyCfg:    notify.Config{BotToken: "t", ChatID: "c"},
+		notifyCfg:    notify.Config{WebhookURL: "http://discord.test/webhook"},
 		authNotified: make(map[string]bool),
 	}
 	authErr := &provider.AuthExpiredError{Err: errors.New("refresh rejected")}
@@ -532,7 +535,7 @@ func TestRunTarget_AuthExpiredError_TriggersNotifyExactlyOnce(t *testing.T) {
 	defer cancel()
 
 	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
-	s.notifyCfg = notify.Config{BotToken: "t", ChatID: "c"} // enable notify; env is unset in test runs
+	s.notifyCfg = notify.Config{WebhookURL: "http://discord.test/webhook"} // enable notify; env is unset in test runs
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -602,7 +605,7 @@ func TestRun_ConcurrentAuthNotifiedWrites_NoRace(t *testing.T) {
 	}
 
 	s := New(testConfig(), targets, false, false, io.Discard)
-	s.notifyCfg = notify.Config{BotToken: "t", ChatID: "c"} // enable notify; env is unset in test runs
+	s.notifyCfg = notify.Config{WebhookURL: "http://discord.test/webhook"} // enable notify; env is unset in test runs
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -633,7 +636,7 @@ func TestRunTarget_GenericReadError_DoesNotTriggerNotify(t *testing.T) {
 	defer cancel()
 
 	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
-	s.notifyCfg = notify.Config{BotToken: "t", ChatID: "c"} // enable notify; env is unset in test runs
+	s.notifyCfg = notify.Config{WebhookURL: "http://discord.test/webhook"} // enable notify; env is unset in test runs
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
