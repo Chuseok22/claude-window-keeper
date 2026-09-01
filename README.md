@@ -59,11 +59,14 @@ won't be able to read or write its own credentials:
 sudo chown -R 1001:1001 /volume1/project/claude-window-keeper/home
 ```
 
-Discord alerting (sent once if a provider's OAuth refresh token is ever rejected outright) is configured via the
-`ENV_FILE` GitHub Secret — set `DISCORD_WEBHOOK_URL=...` there, not in a local config file. If you're updating an
-existing deploy that used `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`, update the secret *before or at the same
-time as* deploying this version — otherwise alerting silently goes dark (the webhook URL is unset, so `Notify`
-treats itself as disabled) until you fix it.
+Discord alerting (sent once per provider per process run, the first time that provider's OAuth refresh token is
+rejected outright — the in-memory dedupe resets on restart) is configured via the `ENV_FILE` GitHub Secret — set
+`DISCORD_WEBHOOK_URL=...` there, not in a local config file. If you're updating an existing deploy that used
+`TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`, update the secret *before or at the same time as* deploying this
+version — otherwise no alert can fire (the webhook URL is unset, so `Notify` treats itself as disabled) until you
+fix it. This is not entirely silent: `watch`'s startup log records `discord alerting: enabled` or `disabled
+(DISCORD_WEBHOOK_URL not set)`, so `docker logs` shows the misconfiguration even though no Discord message goes
+out.
 
 For local development, `docker build -t claude-window-keeper:local .` and `docker run --rm
 claude-window-keeper:local <command>` work without any of the above.
