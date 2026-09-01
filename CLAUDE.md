@@ -22,8 +22,8 @@ Claude Code / Codex / Spark 구독의 5시간 rate-limit window가 리셋되는 
 - 원본 CCLimitPing → `claude-window-keeper`로의 전체 리라이트가 15개 태스크로 완료되어 `main`에 push됨.
 - 최종 리뷰에서 발견된 배포-차단급 Critical 4개는 이미 수정 완료(README chown 안내, 자격증명 write-back 로깅,
   watch.lock PID1 처리, `authNotified` 레이스 수정).
-- 남은 개선사항은 GitHub Issues #1~#6으로 추적 중 — `.claude/rules/50-known-issues.md` 참고. **실제 NAS
-  배포/운영 검증(Issue #6)은 아직 안 됨** — 코드는 완성됐지만 실사용 검증 전입니다.
+- 남은 개선사항은 GitHub Issues로 추적 중입니다. **실제 NAS 배포/운영 검증(Issue #6)은 아직 안 됨** — 코드는
+  완성됐지만 실사용 검증 전입니다.
 
 ## 절대 잊지 말아야 할 것
 
@@ -33,7 +33,7 @@ Claude Code / Codex / Spark 구독의 5시간 rate-limit window가 리셋되는 
 2. **`.github/workflows/PROJECT-*.yaml`는 대부분 `project-auto-wizard`가 관리합니다.** 파일 상단에
    `# project-auto-wizard:managed-workflow` 표시가 있는 파일의 `jobs:`/`steps:` 로직은 직접 고치지 마세요 — 다음
    마법사 업데이트 때 되돌아갈 수 있습니다. `env:` 블록(프로젝트별 설정 구간)만 안전하게 수정 가능한 영역입니다.
-3. **DockerHub 저장소는 반드시 private이어야 합니다.** Telegram bot token이 이미지에 구워지기 때문입니다
+3. **DockerHub 저장소는 반드시 private이어야 합니다.** Discord webhook URL이 이미지에 구워지기 때문입니다
    (`.claude/rules/20-cicd-deployment.md` 참고).
 4. **HTTP 서버가 없습니다.** 이 데몬은 포트를 열지 않습니다. 뭔가 HTTP 헬스체크를 되살리려는 시도를 보면
    의심하세요 — 마법사 워크플로우 기본값이 HTTP 서비스를 가정하고 있어서 잘못 되돌아갈 수 있습니다.
@@ -49,5 +49,4 @@ Claude Code / Codex / Spark 구독의 5시간 rate-limit window가 리셋되는 
 | CI/CD 파이프라인, Docker, 시크릿 관리 | `.claude/rules/20-cicd-deployment.md` |
 | 빌드/테스트/검증 방법 | `.claude/rules/30-testing-and-verification.md` |
 | git/커밋/리뷰 관례 | `.claude/rules/40-git-and-delivery.md` |
-| 알려진 미해결 이슈 | `.claude/rules/50-known-issues.md` |
 | 원 프로젝트와의 관계, 라이선스 | `ATTRIBUTION.md`, `LICENSE` |

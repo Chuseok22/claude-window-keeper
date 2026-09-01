@@ -38,7 +38,7 @@
 ([Issue #14](https://github.com/Chuseok22/claude-window-keeper/issues/14) 포트 부분 수정 완료). 같은 이슈가
 지적한 `.env` 이미지 baking 방식은 검토 후 **현행 유지**로 결정했습니다 — DockerHub 저장소를 private으로 유지하는
 것은 여전히 배포자가 첫 배포 전에 직접 확인해야 하는 수동 절차입니다(자동 검증 없음, 의도적으로 문서화도 추가하지
-않기로 결정 — 아래 `50-known-issues.md`의 fix 기록 참고).
+않기로 결정 — 자세한 배경은 GitHub Issue #14를 참고).
 
 **주의**: `version.yml`의 `deploy.go.VOLUME_HOST_PATH`/`VOLUME_CONTAINER_PATH`는 위 표와 값이 **다릅니다**(아직
 옛날 `/mnt/__PROJECT_NAME__` 형태 그대로) — 이건 마법사가 별도로 기억하는 메타데이터라서 워크플로우 파일 자체를
@@ -68,10 +68,10 @@
 
 | 시크릿 | 어디서 오나 | 어떻게 컨테이너에 도달하나 |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | GitHub Secret `ENV_FILE`의 내용 (`.env` 형식) | CI가 빌드 직전에 `.env` 파일로 씀 → Dockerfile이 이미지에 구움 → entrypoint.sh가 소싱 |
+| `DISCORD_WEBHOOK_URL` | GitHub Secret `ENV_FILE`의 내용 (`.env` 형식) | CI가 빌드 직전에 `.env` 파일로 씀 → Dockerfile이 이미지에 구움 → entrypoint.sh가 소싱 |
 | OAuth 자격증명(`.credentials.json`, `auth.json`) | 사람이 다른 머신(맥)에서 로그인 후 수동으로 복사 | 이미지가 아니라 **볼륨 마운트**로만 관리 — 재발급/refresh로 계속 바뀌는 데이터라 이미지에 구우면 안 됨 |
 
-**`TELEGRAM_*`는 왜 이미지에 구워도 되는가**: OAuth 토큰과 달리 런타임에 재기록될 필요가 없는 정적 시크릿이기
+**`DISCORD_WEBHOOK_URL`은 왜 이미지에 구워도 되는가**: OAuth 토큰과 달리 런타임에 재기록될 필요가 없는 정적 시크릿이기
 때문입니다. 단, 이게 성립하려면 **DockerHub 저장소가 반드시 private이어야 합니다** — public이면 이미지를
 pull한 누구나 `docker run --entrypoint cat <image> /app/.env`로 토큰을 꺼내볼 수 있습니다. 이 요구사항이
 README에 명시적으로 안 써있는 게 [Issue #4](https://github.com/Chuseok22/claude-window-keeper/issues/4)입니다.
@@ -84,4 +84,4 @@ README에 명시적으로 안 써있는 게 [Issue #4](https://github.com/Chuseo
 컨테이너는 UID 1001로 돕니다. NAS 쪽 볼륨 디렉터리를 `sudo mkdir -p`로 만들면 root 소유가 되므로, **반드시
 `sudo chown -R 1001:1001 <볼륨 경로>`를 해줘야** 컨테이너가 자격증명 파일을 읽고 쓸 수 있습니다(README의
 "How it deploys" 섹션에 이 단계가 명시돼 있습니다 — 빠뜨리면 인증이 조용히 영원히 실패하고, 알림도 안 옵니다.
-이유: 권한 에러는 `AuthExpiredError`가 아니라서 Telegram 알림 조건에 안 걸립니다).
+이유: 권한 에러는 `AuthExpiredError`가 아니라서 Discord 알림 조건에 안 걸립니다).
