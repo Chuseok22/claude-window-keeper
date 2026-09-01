@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -54,7 +56,8 @@ func clearLockHeld(path string) {
 	heldLocksMu.Unlock()
 }
 
-func acquireWatchLock(provider string, dryRun bool) (func(), error) {
+func acquireWatchLock(out io.Writer, provider string, dryRun bool) (func(), error) {
+	logger := log.New(out, "", log.LstdFlags)
 	dir, err := config.Dir()
 	if err != nil {
 		return nil, err
@@ -105,7 +108,9 @@ func acquireWatchLock(provider string, dryRun bool) (func(), error) {
 		if foreignAlive || selfHeld {
 			return nil, watchAlreadyRunningError(st)
 		}
-		_ = os.Remove(path)
+		if rerr := os.Remove(path); rerr != nil {
+			logger.Printf("watch.lock 삭제 실패: %v", rerr)
+		}
 	}
 }
 

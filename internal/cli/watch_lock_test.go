@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,13 +13,13 @@ import (
 func TestAcquireWatchLockPreventsSecondWatcher(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	release, err := acquireWatchLock("codex", false)
+	release, err := acquireWatchLock(io.Discard, "codex", false)
 	if err != nil {
 		t.Fatalf("acquireWatchLock first: %v", err)
 	}
 	defer release()
 
-	if _, err := acquireWatchLock("claude", true); err == nil {
+	if _, err := acquireWatchLock(io.Discard, "claude", true); err == nil {
 		t.Fatal("acquireWatchLock second succeeded, want already-running error")
 	} else if !strings.Contains(err.Error(), "watch") {
 		t.Fatalf("acquireWatchLock second error = %q, want watch context", err)
@@ -26,7 +27,7 @@ func TestAcquireWatchLockPreventsSecondWatcher(t *testing.T) {
 
 	release()
 
-	releaseAgain, err := acquireWatchLock("claude", true)
+	releaseAgain, err := acquireWatchLock(io.Discard, "claude", true)
 	if err != nil {
 		t.Fatalf("acquireWatchLock after release: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestAcquireWatchLockClearsStaleLock(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	release, err := acquireWatchLock("claude", false)
+	release, err := acquireWatchLock(io.Discard, "claude", false)
 	if err != nil {
 		t.Fatalf("acquireWatchLock with stale lock: %v", err)
 	}
@@ -87,7 +88,7 @@ func TestAcquireWatchLockTreatsOwnPIDAsStale(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	release, err := acquireWatchLock("claude", false)
+	release, err := acquireWatchLock(io.Discard, "claude", false)
 	if err != nil {
 		t.Fatalf("acquireWatchLock with a lock naming our own PID: %v", err)
 	}
