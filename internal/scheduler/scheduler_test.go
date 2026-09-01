@@ -500,7 +500,7 @@ func swapDefaultHTTPClientForTest(t *testing.T) *countingTransport {
 func TestNotifyAuthExpired_OncePerEpisode_ThenResetOnSuccess(t *testing.T) {
 	rt := swapDefaultHTTPClientForTest(t)
 	s := &Scheduler{
-		notifyCfg:    notify.Config{WebhookURL: "http://discord.test/webhook"},
+		notifyCfg:    notify.Config{WebhookURL: "https://discord.test/webhook"},
 		authNotified: make(map[string]bool),
 	}
 	authErr := &provider.AuthExpiredError{Err: errors.New("refresh rejected")}
@@ -536,7 +536,7 @@ func TestRunTarget_AuthExpiredError_TriggersNotifyExactlyOnce(t *testing.T) {
 	defer cancel()
 
 	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
-	s.notifyCfg = notify.Config{WebhookURL: "http://discord.test/webhook"} // enable notify; env is unset in test runs
+	s.notifyCfg = notify.Config{WebhookURL: "https://discord.test/webhook"} // enable notify; env is unset in test runs
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -606,7 +606,7 @@ func TestRun_ConcurrentAuthNotifiedWrites_NoRace(t *testing.T) {
 	}
 
 	s := New(testConfig(), targets, false, false, io.Discard)
-	s.notifyCfg = notify.Config{WebhookURL: "http://discord.test/webhook"} // enable notify; env is unset in test runs
+	s.notifyCfg = notify.Config{WebhookURL: "https://discord.test/webhook"} // enable notify; env is unset in test runs
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -637,7 +637,7 @@ func TestRun_ConcurrentAuthNotifiedWrites_NoRace(t *testing.T) {
 func TestRun_LogsDiscordAlertingStatus(t *testing.T) {
 	var buf bytes.Buffer
 	s := New(testConfig(), []Target{}, false, false, &buf)
-	s.notifyCfg = notify.Config{WebhookURL: "http://discord.test/webhook"}
+	s.notifyCfg = notify.Config{WebhookURL: "https://discord.test/webhook"}
 	s.Run(context.Background())
 	if got := buf.String(); !strings.Contains(got, "discord alerting: enabled") {
 		t.Fatalf("log output = %q, want it to contain %q", got, "discord alerting: enabled")
@@ -659,7 +659,7 @@ func TestRunTarget_GenericReadError_DoesNotTriggerNotify(t *testing.T) {
 	defer cancel()
 
 	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
-	s.notifyCfg = notify.Config{WebhookURL: "http://discord.test/webhook"} // enable notify; env is unset in test runs
+	s.notifyCfg = notify.Config{WebhookURL: "https://discord.test/webhook"} // enable notify; env is unset in test runs
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

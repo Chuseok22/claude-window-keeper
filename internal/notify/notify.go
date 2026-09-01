@@ -10,9 +10,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -33,14 +35,21 @@ func (c Config) Enabled() bool { return c.WebhookURL != "" }
 
 // Notify posts title and message (joined by a newline) to the configured
 // Discord webhook as the message's content. It is a no-op returning nil
-// when cfg is not Enabled(). On any failure — a request that never reaches
-// Discord, or a non-2xx response — it returns a descriptive error instead
-// of swallowing it; the caller decides how to log or otherwise surface
-// that error. Notify itself never retries.
+// when cfg is not Enabled(). On any failure — a non-HTTPS or malformed
+// webhook URL, a request that never reaches Discord, or a non-2xx response
+// — it returns a descriptive error instead of swallowing it; the caller
+// decides how to log or otherwise surface that error. Notify itself never
+// retries. Returned errors never include the webhook URL itself, since its
+// path is the webhook's secret token.
 func Notify(cfg Config, title, message string) error {
 	if !cfg.Enabled() {
 		return nil
 	}
+	parsed, err := url.Parse(cfg.WebhookURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return errors.New("discord notify: webhook URL must be an https URL with a host")
+	}
+
 	text := title
 	if message != "" {
 		text += "\n" + message
@@ -55,13 +64,13 @@ func Notify(cfg Config, title, message string) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.WebhookURL, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("discord notify: build request: %w", err)
+		return fmt.Errorf("discord notify: build request: %w", sanitizeURLError(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("discord notify: send request: %w", err)
+		return fmt.Errorf("discord notify: send request: %w", sanitizeURLError(err))
 	}
 	defer resp.Body.Close()
 
@@ -70,4 +79,16 @@ func Notify(cfg Config, title, message string) error {
 		return fmt.Errorf("discord notify: unexpected status %d: %s", resp.StatusCode, snippet)
 	}
 	return nil
+}
+
+// sanitizeURLError strips the request URL out of a *url.Error before it
+// reaches a log line. Both http.NewRequestWithContext and http.Client.Do
+// return *url.Error whose Error() string embeds the full request URL
+// verbatim, which for a Discord webhook includes the secret token.
+func sanitizeURLError(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return ue.Err
+	}
+	return err
 }
