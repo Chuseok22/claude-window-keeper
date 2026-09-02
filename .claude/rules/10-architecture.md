@@ -38,8 +38,9 @@ type Provider interface {
 - **`provider.ClaudeSubscriptionAccessError`** (`internal/provider/claude.go`) — 조직/계정이 구독 자체를
   비활성화한 경우. 토큰은 멀쩡한데 접근이 막힌 상태.
 - **`provider.AuthExpiredError`** (`internal/provider/provider.go`) — refresh token이 **완전히 죽어서**
-  (`auth.ErrRefreshRejected`, HTTP 400/401 응답으로 판정) 사람이 재로그인해야 하는 상태. **이것만** Discord
-  알림을 트리거합니다.
+  (`auth.ErrRefreshRejected`, HTTP 400/401 응답으로 판정) 사람이 재로그인해야 하는 상태. 이 두 에러 타입 중에서는
+  **`AuthExpiredError`만** 인증 실패 Discord 알림을 트리거합니다(`ClaudeSubscriptionAccessError`는 트리거하지
+  않음). 트리거 *성공* 알림은 이것과 별개 조건으로 발송됩니다 — 아래 "Discord 알림" 섹션 참고.
 
 ```go
 // internal/provider/provider.go
@@ -50,14 +51,15 @@ type AuthExpiredError struct{ Err error }
 
 ```go
 type Scheduler struct {
-    cfg          config.Config
-    targets      []Target
-    dryRun       bool
-    log          *log.Logger
-    live         *liveStatus
-    notifyCfg    notify.Config          // os.Getenv("DISCORD_WEBHOOK_URL")로 구성, config.toml 아님
-    authMu       sync.Mutex             // authNotified 보호 — target별 goroutine이 동시에 씀
-    authNotified map[string]bool
+    cfg           config.Config
+    targets       []Target
+    dryRun        bool
+    log           *log.Logger
+    live          *liveStatus
+    notifyCfg     notify.Config          // os.Getenv("DISCORD_WEBHOOK_URL")로 구성, config.toml 아님
+    notifySuccess bool                   // envBoolDefaultTrue("DISCORD_NOTIFY_ON_SUCCESS")로 구성, 기본 true
+    authMu        sync.Mutex             // authNotified 보호 — target별 goroutine이 동시에 씀
+    authNotified  map[string]bool
 }
 ```
 
@@ -86,9 +88,18 @@ func Notify(cfg Config, title, message string) error  // 실패 시 error 반환
 `.env` 기반 시크릿 전달을 이미 갖고 있어서 거기 맞춘 설계입니다 (자세한 내용은 `20-cicd-deployment.md`).
 **`config.toml`에 Discord 관련 필드를 추가하려는 시도가 있으면 의도적으로 피한 설계임을 알려주세요.**
 
-알림은 인증 완전 실패 하나만, 같은 provider가 실패 상태인 동안 최초 1회만 보냅니다(`authNotified` map으로
+인증 완전 실패 알림은, 같은 provider가 실패 상태인 동안 최초 1회만 보냅니다(`authNotified` map으로
 추적, `ReadUsage` 성공 시 리셋). 실패한 전송은 `Notify()`가 반환한 error를 `notifyAuthExpired` 호출부가
 `s.log`에 남기며, 재시도는 하지 않습니다 — watch 루프를 막지 않는 게 우선입니다.
+
+5h window 트리거가 실제로 검증(재조회로 `FiveHour.Active()` 확인)됐을 때도 Discord로 알림을 보낸다
+(`Scheduler.notifyTriggerSucceeded`, `internal/scheduler/scheduler.go`). 알림 시점은 `Trigger()` 호출
+성공이 아니라 그 이후의 검증 성공 지점이다 — `Trigger()`만 믿으면 로그인 프롬프트 오인 같은 경우에
+거짓 성공 알림이 나갈 수 있기 때문이다. 환경변수 `DISCORD_NOTIFY_ON_SUCCESS`(기본값 `true`, `false`로
+설정하면 끔, `DISCORD_WEBHOOK_URL`과 동일하게 컨테이너 시작 시 1회만 읽음)로 켜고 끌 수 있다. dry-run
+모드에서는 애초에 이 코드 경로에 도달하지 않으므로 알림이 나가지 않는다. 반대로 트리거는 실제로 성공했는데
+검증 재조회 자체가 일시적으로 실패하는 경우(네트워크 순단 등)에는 그 window에 대한 성공 알림이 그냥
+누락된다 — 실패 알림처럼 별도 dedup 상태를 두지 않기로 한 설계상 트레이드오프이며 버그가 아니다.
 
 ## 자격증명 로딩 (`internal/auth/`)
 

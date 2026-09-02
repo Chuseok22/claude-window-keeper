@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -43,14 +44,15 @@ type Target struct {
 
 // Scheduler drives the watch loops.
 type Scheduler struct {
-	cfg          config.Config
-	targets      []Target
-	dryRun       bool
-	log          *log.Logger
-	live         *liveStatus
-	notifyCfg    notify.Config
-	authMu       sync.Mutex // guards authNotified, written from each target's goroutine
-	authNotified map[string]bool
+	cfg           config.Config
+	targets       []Target
+	dryRun        bool
+	log           *log.Logger
+	live          *liveStatus
+	notifyCfg     notify.Config
+	notifySuccess bool       // whether a verified trigger success also sends a Discord alert
+	authMu        sync.Mutex // guards authNotified, written from each target's goroutine
+	authNotified  map[string]bool
 }
 
 // New builds a scheduler that logs to out. When live is true and out is an
@@ -63,13 +65,14 @@ func New(cfg config.Config, targets []Target, dryRun, live bool, out io.Writer) 
 	}
 	status := newLiveStatus(out, names, live)
 	return &Scheduler{
-		cfg:          cfg,
-		targets:      targets,
-		dryRun:       dryRun,
-		log:          log.New(status, "", log.LstdFlags),
-		live:         status,
-		notifyCfg:    notify.Config{WebhookURL: os.Getenv("DISCORD_WEBHOOK_URL")},
-		authNotified: make(map[string]bool),
+		cfg:           cfg,
+		targets:       targets,
+		dryRun:        dryRun,
+		log:           log.New(status, "", log.LstdFlags),
+		live:          status,
+		notifyCfg:     notify.Config{WebhookURL: os.Getenv("DISCORD_WEBHOOK_URL")},
+		notifySuccess: envBoolDefaultTrue("DISCORD_NOTIFY_ON_SUCCESS"),
+		authNotified:  make(map[string]bool),
 	}
 }
 
@@ -83,6 +86,11 @@ func (s *Scheduler) Run(ctx context.Context) {
 		names, s.cfg.WeeklyThreshold, s.cfg.ResetBuffer.Duration, s.dryRun)
 	if s.notifyCfg.Enabled() {
 		s.log.Printf("discord alerting: enabled")
+		if s.notifySuccess {
+			s.log.Printf("discord success notify: enabled")
+		} else {
+			s.log.Printf("discord success notify: disabled (DISCORD_NOTIFY_ON_SUCCESS=false)")
+		}
 	} else {
 		s.log.Printf("discord alerting: disabled (DISCORD_WEBHOOK_URL not set)")
 	}
@@ -326,6 +334,7 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 		verifyBackoff = minBackoff
 		backoff = minBackoff
 		s.log.Printf("[%s] window verified active", name)
+		s.notifyTriggerSucceeded(name, vu.FiveHour, res)
 	}
 }
 
@@ -372,6 +381,31 @@ func (s *Scheduler) notifyAuthExpired(name string, err error) {
 	}
 }
 
+// notifyTriggerSucceeded sends a Discord alert confirming a provider's 5h
+// window was verified active after a trigger. Gated by notifySuccess
+// (DISCORD_NOTIFY_ON_SUCCESS, default true — see New()). Like
+// notifyAuthExpired, a failed send is logged and never retried; it must
+// never block the watch loop.
+func (s *Scheduler) notifyTriggerSucceeded(name string, w usage.Window, res *provider.TriggerResult) {
+	if !s.notifySuccess {
+		return
+	}
+	// Discord notification text must be Korean-only, unlike triggerCost()'s
+	// English log tail — so build a Korean equivalent inline here rather than
+	// reusing triggerCost() (a one-off format, not worth a shared helper).
+	var cost string
+	if res != nil && res.HasUsage {
+		cost = fmt.Sprintf(" — 토큰 %d개 (입력 %d / 출력 %d)", res.TotalTokens, res.InputTokens, res.OutputTokens)
+		if res.CostUSD > 0 {
+			cost += fmt.Sprintf(", $%.4f", res.CostUSD)
+		}
+	}
+	msg := fmt.Sprintf("다음 리셋 예정: %s%s", w.ResetsAt.Local().Format("15:04:05"), cost)
+	if nerr := notify.Notify(s.notifyCfg, name+": 5시간 세션이 시작됐습니다", msg); nerr != nil {
+		s.log.Printf("[%s] discord 성공 알림 전송 실패: %v", name, nerr)
+	}
+}
+
 // authWasNotified reports whether name's auth-expired alert has already been
 // sent for the current episode. Safe for concurrent use: Run launches one
 // goroutine per target, and every goroutine shares this map.
@@ -390,7 +424,9 @@ func (s *Scheduler) setAuthNotified(name string, v bool) {
 }
 
 // triggerCost renders the token/cost tail for logs, e.g.
-// " — 32934 tok (in 32792 / out 142), $0.0110".
+// " — 32934 tok (in 32792 / out 142), $0.0110". Keep in sync with
+// notifyTriggerSucceeded's Korean-worded rendering of the same fields for
+// the Discord success notification.
 func triggerCost(res *provider.TriggerResult) string {
 	if res == nil || !res.HasUsage {
 		return ""
@@ -440,4 +476,19 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 	case <-t.C:
 		return true
 	}
+}
+
+// envBoolDefaultTrue reads a boolean environment variable that defaults to
+// true when unset or unparseable — used for DISCORD_NOTIFY_ON_SUCCESS, which
+// should require an explicit opt-out rather than an explicit opt-in.
+func envBoolDefaultTrue(key string) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return true
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return true
+	}
+	return b
 }

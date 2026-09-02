@@ -28,9 +28,11 @@ for the full relationship. Scope has been narrowed to run as a single Docker con
   quota — only the deliberate trigger ping does.
 - **Triggers through the official CLIs.** No private/undocumented request shapes for the actual "start a
   session" step — it shells out to the same `claude` / `codex` binaries you'd run by hand.
-- **One alert, for one failure mode.** A Discord message is sent only when a provider's OAuth refresh token is
-  outright rejected — i.e. you need to log back in on that provider. Everything else (rate limits, transient
-  network errors) is handled silently by the retry/backoff logic in the watch loop.
+- **Two Discord alerts, both non-blocking.** A message is sent when a provider's OAuth refresh token is outright
+  rejected — i.e. you need to log back in on that provider — and, on by default, when a trigger's window
+  verification confirms a new 5-hour window actually started (set `DISCORD_NOTIFY_ON_SUCCESS=false` to turn the
+  latter off). Everything else (rate limits, transient network errors) is handled silently by the retry/backoff
+  logic in the watch loop.
 - **Three independent providers.** `claude` and `codex` are enabled by default; `spark` (a second Codex-backed
   target) is off by default so it doesn't add another quota-consuming ping until you opt in.
 
@@ -68,6 +70,15 @@ fix it. This is not entirely silent: `watch`'s startup log records `discord aler
 (DISCORD_WEBHOOK_URL not set)`, so `docker logs` shows the misconfiguration even though no Discord message goes
 out.
 
+The same webhook also sends one message when a trigger's post-ping verification confirms the 5-hour window
+actually started (provider name, next reset time, and token/cost if the CLI reported any) — useful for
+confirming the daemon is actually working during early operation. This is on by default; set
+`DISCORD_NOTIFY_ON_SUCCESS=false` in the `ENV_FILE` secret to turn it off once you've confirmed things are
+stable. Like `DISCORD_WEBHOOK_URL`, this is baked into the image at build time and read once at container
+startup — a plain `docker restart` reuses the same image and will NOT pick up a changed secret. Turning it off
+takes a new build+deploy (this repo's CI/CD is trunk-based, so pushing to `main` after updating the secret is
+enough).
+
 For local development, `docker build -t claude-window-keeper:local .` and `docker run --rm
 claude-window-keeper:local <command>` work without any of the above.
 
@@ -87,6 +98,9 @@ claude-window-keeper:local <command>` work without any of the above.
    watch loop sends one Discord message via `DISCORD_WEBHOOK_URL` and keeps looping — it doesn't crash the
    daemon, and it doesn't re-alert every cycle for the same provider. A failed send is logged and dropped, never
    retried.
+6. **Trigger success alert.** Once a trigger's window is verified active (see step 4), the watch loop also
+   sends one Discord message confirming it — gated by `DISCORD_NOTIFY_ON_SUCCESS` (default on). Same
+   non-blocking, log-and-drop-on-failure behavior as the auth-failure alert.
 
 ## Commands
 
