@@ -1,7 +1,23 @@
 # Changelog
 
-**현재 버전:** 0.10.7  
-**마지막 업데이트:** 2026-09-01T11:46:13Z  
+**현재 버전:** 0.11.0  
+**마지막 업데이트:** 2026-09-02T06:47:56Z  
+
+---
+
+## [0.11.0] - 2026-09-02
+
+**✨ 기능**
+- send a Discord notification when a trigger's window verifies active
+- add DISCORD_NOTIFY_ON_SUCCESS toggle scaffolding
+
+**🐛 수정**
+- use Korean wording for token/cost info in Discord success notification
+
+**📝 문서**
+- address PR review feedback on remaining auth-only Discord wording
+- fix stale toggle-restart claim and auth-only wording after Discord success notify
+- document the Discord trigger-success notification and its toggle
 
 ---
 

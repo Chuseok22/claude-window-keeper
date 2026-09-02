@@ -1,13 +1,46 @@
 {
   "metadata": {
-    "lastUpdated": "2026-09-01T11:46:13Z",
-    "currentVersion": "0.10.7",
+    "lastUpdated": "2026-09-02T06:47:56Z",
+    "currentVersion": "0.11.0",
     "projectTypes": [
       "go"
     ],
-    "totalReleases": 8
+    "totalReleases": 9
   },
   "releases": [
+    {
+      "version": "0.11.0",
+      "project_types": [
+        "go"
+      ],
+      "date": "2026-09-02",
+      "pr_number": null,
+      "raw_summary": "## [0.11.0]\n\n### ✨ 기능\n- send a Discord notification when a trigger's window verifies active\n- add DISCORD_NOTIFY_ON_SUCCESS toggle scaffolding\n\n### 🐛 수정\n- use Korean wording for token/cost info in Discord success notification\n\n### 📝 문서\n- address PR review feedback on remaining auth-only Discord wording\n- fix stale toggle-restart claim and auth-only wording after Discord success notify\n- document the Discord trigger-success notification and its toggle",
+      "parsed_changes": {
+        "기능": {
+          "title": "✨ 기능",
+          "items": [
+            "send a Discord notification when a trigger's window verifies active",
+            "add DISCORD_NOTIFY_ON_SUCCESS toggle scaffolding"
+          ]
+        },
+        "수정": {
+          "title": "🐛 수정",
+          "items": [
+            "use Korean wording for token/cost info in Discord success notification"
+          ]
+        },
+        "문서": {
+          "title": "📝 문서",
+          "items": [
+            "address PR review feedback on remaining auth-only Discord wording",
+            "fix stale toggle-restart claim and auth-only wording after Discord success notify",
+            "document the Discord trigger-success notification and its toggle"
+          ]
+        }
+      },
+      "parse_method": "markdown"
+    },
     {
       "version": "0.10.7",
       "project_types": [
