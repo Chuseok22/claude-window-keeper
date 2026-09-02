@@ -90,6 +90,15 @@ func Notify(cfg Config, title, message string) error  // 실패 시 error 반환
 추적, `ReadUsage` 성공 시 리셋). 실패한 전송은 `Notify()`가 반환한 error를 `notifyAuthExpired` 호출부가
 `s.log`에 남기며, 재시도는 하지 않습니다 — watch 루프를 막지 않는 게 우선입니다.
 
+5h window 트리거가 실제로 검증(재조회로 `FiveHour.Active()` 확인)됐을 때도 Discord로 알림을 보낸다
+(`Scheduler.notifyTriggerSucceeded`, `internal/scheduler/scheduler.go`). 알림 시점은 `Trigger()` 호출
+성공이 아니라 그 이후의 검증 성공 지점이다 — `Trigger()`만 믿으면 로그인 프롬프트 오인 같은 경우에
+거짓 성공 알림이 나갈 수 있기 때문이다. 환경변수 `DISCORD_NOTIFY_ON_SUCCESS`(기본값 `true`, `false`로
+설정하면 끔, `DISCORD_WEBHOOK_URL`과 동일하게 컨테이너 시작 시 1회만 읽음)로 켜고 끌 수 있다. dry-run
+모드에서는 애초에 이 코드 경로에 도달하지 않으므로 알림이 나가지 않는다. 반대로 트리거는 실제로 성공했는데
+검증 재조회 자체가 일시적으로 실패하는 경우(네트워크 순단 등)에는 그 window에 대한 성공 알림이 그냥
+누락된다 — 실패 알림처럼 별도 dedup 상태를 두지 않기로 한 설계상 트레이드오프이며 버그가 아니다.
+
 ## 자격증명 로딩 (`internal/auth/`)
 
 `ClaudeAuth`/`CodexAuth`가 각각 `~/.claude/.credentials.json`, `~/.codex/auth.json`(또는

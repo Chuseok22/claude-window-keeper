@@ -68,6 +68,12 @@ fix it. This is not entirely silent: `watch`'s startup log records `discord aler
 (DISCORD_WEBHOOK_URL not set)`, so `docker logs` shows the misconfiguration even though no Discord message goes
 out.
 
+The same webhook also sends one message when a trigger's post-ping verification confirms the 5-hour window
+actually started (provider name, next reset time, and token/cost if the CLI reported any) — useful for
+confirming the daemon is actually working during early operation. This is on by default; set
+`DISCORD_NOTIFY_ON_SUCCESS=false` in the `ENV_FILE` secret to turn it off once you've confirmed things are
+stable. Like the auth-failure alert, this is also read once at container startup.
+
 For local development, `docker build -t claude-window-keeper:local .` and `docker run --rm
 claude-window-keeper:local <command>` work without any of the above.
 
@@ -87,6 +93,9 @@ claude-window-keeper:local <command>` work without any of the above.
    watch loop sends one Discord message via `DISCORD_WEBHOOK_URL` and keeps looping — it doesn't crash the
    daemon, and it doesn't re-alert every cycle for the same provider. A failed send is logged and dropped, never
    retried.
+6. **Trigger success alert.** Once a trigger's window is verified active (see step 4), the watch loop also
+   sends one Discord message confirming it — gated by `DISCORD_NOTIFY_ON_SUCCESS` (default on). Same
+   non-blocking, log-and-drop-on-failure behavior as the auth-failure alert.
 
 ## Commands
 

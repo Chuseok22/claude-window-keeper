@@ -71,6 +71,10 @@
 | `DISCORD_WEBHOOK_URL` | GitHub Secret `ENV_FILE`의 내용 (`.env` 형식) | CI가 빌드 직전에 `.env` 파일로 씀 → Dockerfile이 이미지에 구움 → entrypoint.sh가 소싱 |
 | OAuth 자격증명(`.credentials.json`, `auth.json`) | 사람이 다른 머신(맥)에서 로그인 후 수동으로 복사 | 이미지가 아니라 **볼륨 마운트**로만 관리 — 재발급/refresh로 계속 바뀌는 데이터라 이미지에 구우면 안 됨 |
 
+`DISCORD_NOTIFY_ON_SUCCESS`도 이미지에 구워지는 값이다(정적 시크릿은 아니지만 같은 `.env` 경로를 탄다).
+기본값이 `true`(켜짐)이라 이 값을 명시적으로 `.env`/`ENV_FILE`에 넣지 않아도 성공 알림은 그대로 나간다 —
+끄고 싶을 때만 `DISCORD_NOTIFY_ON_SUCCESS=false` 줄을 추가하면 된다.
+
 **`DISCORD_WEBHOOK_URL`은 왜 이미지에 구워도 되는가**: OAuth 토큰과 달리 런타임에 재기록될 필요가 없는 정적 시크릿이기
 때문입니다. 단, 이게 성립하려면 **DockerHub 저장소가 반드시 private이어야 합니다** — public이면 이미지를
 pull한 누구나 `docker run --entrypoint cat <image> /app/.env`로 토큰을 꺼내볼 수 있습니다. 이 요구사항이
