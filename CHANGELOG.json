@@ -1,13 +1,31 @@
 {
   "metadata": {
-    "lastUpdated": "2026-09-02T09:44:04Z",
-    "currentVersion": "0.12.0",
+    "lastUpdated": "2026-09-02T09:56:58Z",
+    "currentVersion": "0.12.1",
     "projectTypes": [
       "go"
     ],
-    "totalReleases": 10
+    "totalReleases": 11
   },
   "releases": [
+    {
+      "version": "0.12.1",
+      "project_types": [
+        "go"
+      ],
+      "date": "2026-09-02",
+      "pr_number": null,
+      "raw_summary": "## [0.12.1]\n\n### 📝 문서\n- 20260825_#4_문서_README에_DockerHub_private_요구사항_및_로컬_env_주의사항_누락 — DockerHub private 요구사항, 로컬 .env 빌드 주의사항, Discord 설정 문서 보강",
+      "parsed_changes": {
+        "문서": {
+          "title": "📝 문서",
+          "items": [
+            "20260825_#4_문서_README에_DockerHub_private_요구사항_및_로컬_env_주의사항_누락 — DockerHub private 요구사항, 로컬 .env 빌드 주의사항, Discord 설정 문서 보강"
+          ]
+        }
+      },
+      "parse_method": "markdown"
+    },
     {
       "version": "0.12.0",
       "project_types": [
