@@ -548,13 +548,18 @@ func TestTriggerCost(t *testing.T) {
 // every call site, since several of these tests reach Notify indirectly
 // through Scheduler.Run/runTarget rather than calling it directly.
 type countingTransport struct {
-	mu    sync.Mutex
-	count int
+	mu       sync.Mutex
+	count    int
+	lastBody []byte // request body of the most recent RoundTrip, for asserting message content
 }
 
-func (rt *countingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+func (rt *countingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	rt.mu.Lock()
 	rt.count++
+	if req.Body != nil {
+		body, _ := io.ReadAll(req.Body)
+		rt.lastBody = body
+	}
 	rt.mu.Unlock()
 	return &http.Response{
 		StatusCode: http.StatusOK,
@@ -567,6 +572,14 @@ func (rt *countingTransport) Count() int {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 	return rt.count
+}
+
+// LastBody returns the request body of the most recent RoundTrip call
+// (the JSON payload notify.Notify sent to Discord).
+func (rt *countingTransport) LastBody() string {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	return string(rt.lastBody)
 }
 
 // swapDefaultHTTPClientForTest points the process-wide http.DefaultClient
@@ -625,11 +638,19 @@ func TestNotifyTriggerSucceeded_RespectsToggleAndWebhookConfig(t *testing.T) {
 		t.Fatalf("notify calls with toggle off = %d, want 0", got)
 	}
 
-	// Toggle on, webhook configured: sends exactly once.
+	// Toggle on, webhook configured: sends exactly once, with Korean-only
+	// token/cost wording — a regression check for the English "tok/in/out"
+	// wording triggerCost() uses in log lines, which must not leak into
+	// Discord notification text.
 	s = &Scheduler{notifyCfg: notify.Config{WebhookURL: "https://discord.test/webhook"}, notifySuccess: true}
 	s.notifyTriggerSucceeded("claude", w, res)
 	if got := rt.Count(); got != 1 {
 		t.Fatalf("notify calls with toggle on = %d, want 1", got)
+	}
+	if body := rt.LastBody(); !strings.Contains(body, "토큰 100개 (입력 90 / 출력 10), $0.0110") {
+		t.Fatalf("notify body = %q, want it to contain the Korean token/cost wording", body)
+	} else if strings.Contains(body, "tok") || strings.Contains(body, " in ") || strings.Contains(body, " out ") {
+		t.Fatalf("notify body = %q, want no English tok/in/out wording", body)
 	}
 
 	// Toggle on but no webhook: notify.Notify no-ops internally (Config.Enabled()

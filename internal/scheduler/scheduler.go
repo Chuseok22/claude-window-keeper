@@ -390,7 +390,17 @@ func (s *Scheduler) notifyTriggerSucceeded(name string, w usage.Window, res *pro
 	if !s.notifySuccess {
 		return
 	}
-	msg := fmt.Sprintf("다음 리셋 예정: %s%s", w.ResetsAt.Local().Format("15:04:05"), triggerCost(res))
+	// Discord notification text must be Korean-only, unlike triggerCost()'s
+	// English log tail — so build a Korean equivalent inline here rather than
+	// reusing triggerCost() (a one-off format, not worth a shared helper).
+	var cost string
+	if res != nil && res.HasUsage {
+		cost = fmt.Sprintf(" — 토큰 %d개 (입력 %d / 출력 %d)", res.TotalTokens, res.InputTokens, res.OutputTokens)
+		if res.CostUSD > 0 {
+			cost += fmt.Sprintf(", $%.4f", res.CostUSD)
+		}
+	}
+	msg := fmt.Sprintf("다음 리셋 예정: %s%s", w.ResetsAt.Local().Format("15:04:05"), cost)
 	if nerr := notify.Notify(s.notifyCfg, name+": 5시간 세션이 시작됐습니다", msg); nerr != nil {
 		s.log.Printf("[%s] discord 성공 알림 전송 실패: %v", name, nerr)
 	}
