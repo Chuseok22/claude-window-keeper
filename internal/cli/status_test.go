@@ -304,3 +304,20 @@ func TestFmtWindowAndResetCreditCarryTheZone(t *testing.T) {
 		t.Fatalf("credit line = %q, want the zone %q on the expiry", got, zone)
 	}
 }
+
+func TestStatusCmdAcceptsOptionalProviderArg(t *testing.T) {
+	cmd := newStatusCmd()
+
+	for _, args := range [][]string{{}, {"claude"}, {"codex"}, {"spark"}, {"all"}} {
+		if err := cmd.Args(cmd, args); err != nil {
+			t.Errorf("Args(%v) = %v, want nil", args, err)
+		}
+	}
+
+	if err := cmd.Args(cmd, []string{"bogus"}); err == nil {
+		t.Error("Args([bogus]) = nil, want error for invalid provider")
+	}
+	if err := cmd.Args(cmd, []string{"claude", "codex"}); err == nil {
+		t.Error("Args([claude codex]) = nil, want error for too many args")
+	}
+}

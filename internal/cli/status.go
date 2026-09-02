@@ -21,19 +21,24 @@ func newStatusCmd() *cobra.Command {
 	var jsonOut bool
 	text := localizedText()
 	cmd := &cobra.Command{
-		Use:     "status",
-		Aliases: []string{"s", "stat"},
-		Short:   text.statusShort,
-		Long:    text.statusLong,
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Use:       "status [provider]",
+		Aliases:   []string{"s", "stat"},
+		Short:     text.statusShort,
+		Long:      text.statusLong,
+		Args:      cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs),
+		ValidArgs: []string{"claude", "codex", "spark", "all"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := "all"
+			if len(args) > 0 {
+				name = args[0]
+			}
 			cfg, err := config.Load()
 			if err != nil {
 				return err
 			}
-			providers := enabledProviders(cfg)
-			if len(providers) == 0 {
-				return fmt.Errorf("no providers enabled in config")
+			providers, err := selectProviders(cfg, name)
+			if err != nil {
+				return err
 			}
 			return runStatus(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), text, providers, verbose, jsonOut, cfg.UsageDisplay)
 		},
