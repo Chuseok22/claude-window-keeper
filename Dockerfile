@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code @openai/codex \
-    && useradd -m -u 1001 keeper
+    && useradd -m -u 1026 keeper
 
 COPY --from=build /out/claude-window-keeper /usr/local/bin/claude-window-keeper
 COPY entrypoint.sh /app/entrypoint.sh
