@@ -45,6 +45,40 @@
 직접 고칠 때는 안 갱신됐습니다. 마법사를 다시 돌려서 재동기화가 일어나면 이 값들이 워크플로우 파일을 덮어쓸
 수도 있으니, 그런 상황이 생기면 이 표를 기준으로 다시 맞춰야 합니다.
 
+## Claude 자격증명 재동기화 (수동, `SYNC-CLAUDE-CREDENTIALS.yaml`)
+
+Claude Code의 OAuth refresh token이 완전히 만료되면(`AuthExpiredError`, Discord 알림 발송) 사람이 로컬에서
+재로그인해야 합니다. 이후 NAS에 반영하는 절차를 `.github/workflows/SYNC-CLAUDE-CREDENTIALS.yaml`
+(`workflow_dispatch`로만 실행, `project-auto-wizard:managed-workflow` 마커 없음 — 마법사가 관리하지 않는 순수
+수동 파일)로 대체할 수 있습니다.
+
+사용 절차: 로컬에서 `claude` CLI로 재로그인 → `gh secret set CLAUDE_CREDENTIALS_JSON <
+~/.claude/.credentials.json`으로 secret 갱신 → GitHub Actions 탭에서 이 워크플로우를 수동 실행. SSH 접속은
+`PROJECT-GO-SIMPLE-CICD.yaml`과 동일한 secret(`SERVER_HOST`/`SERVER_USER`/`SERVER_PASSWORD`/`SSH_KEY`)을
+재사용하므로 새로 등록할 secret은 `CLAUDE_CREDENTIALS_JSON` 하나뿐입니다. 실행이 성공하면 `gh secret delete
+CLAUDE_CREDENTIALS_JSON`으로 secret을 즉시 삭제합니다 — 나중에 이 워크플로우가 실수로 재실행되면 그 시점의
+secret 값이 그대로 NAS에 반영되는데, 이미 회전됐거나 오래된 토큰일 수 있어 인증을 오히려 깨뜨릴 수 있기
+때문입니다.
+
+**의도적으로 trunk-based 배포 파이프라인과 분리되어 있습니다.** 매 `main` push마다 자동 실행되면, 컨테이너가
+이미 refresh해서 최신 상태인 토큰을 이 워크플로우에 저장된 구버전 secret 값으로 덮어써버릴 위험이 있기
+때문입니다 — 이 워크플로우는 사람이 재로그인 직후에만 의도적으로 트리거해야 합니다.
+
+**컨테이너 재시작이나 재배포는 필요 없습니다.** `internal/provider/provider.go`의 `fetchWithAuth`가 API 401
+응답마다 `Reload()`로 디스크에서 자격증명을 다시 읽으므로(`internal/auth/claude.go`), NAS 파일만 갱신하면
+스케줄러의 다음 재시도 사이클에서 자동으로 새 토큰을 집어 읽습니다. 워크플로우 마지막 스텝이 컨테이너 안에서
+`claude-window-keeper status claude`(`internal/cli/status.go`의 provider 위치 인자)를 실행해 그 자리에서 바로
+파일이 올바르게 반영됐는지 검증합니다. 단, 이 검증은 파일이 정상인지만 확인할 뿐이며, `watch` 데몬 자체가
+실제로 재시도해서 window를 복구하는 데는 백오프 상한(`internal/scheduler/scheduler.go`의 `maxBackoff`,
+10분)만큼 지연될 수 있습니다.
+
+파일을 덮어쓰기 전에 기존 자격증명을 `.credentials.json.bak`으로 백업하고, NAS 경로는 하드코딩된 값 대신
+실행 중인 컨테이너의 실제 볼륨 마운트에서 가져옵니다 — 검증이 실패하면 SSH로 접속해 `.bak` 파일을 원래
+이름으로 되돌려 복구할 수 있습니다.
+
+Codex/Spark 자격증명(`~/.codex/auth.json`)은 이 워크플로우의 대상이 아닙니다 — 지금까지처럼 수동 `scp`로
+옮깁니다.
+
 ## goreleaser는 없습니다
 
 원래 있던 `.goreleaser.yaml`(크로스플랫폼 바이너리 릴리즈용)은 완전히 삭제했습니다. Docker 전용 배포로
