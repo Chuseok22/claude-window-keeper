@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -43,14 +44,15 @@ type Target struct {
 
 // Scheduler drives the watch loops.
 type Scheduler struct {
-	cfg          config.Config
-	targets      []Target
-	dryRun       bool
-	log          *log.Logger
-	live         *liveStatus
-	notifyCfg    notify.Config
-	authMu       sync.Mutex // guards authNotified, written from each target's goroutine
-	authNotified map[string]bool
+	cfg           config.Config
+	targets       []Target
+	dryRun        bool
+	log           *log.Logger
+	live          *liveStatus
+	notifyCfg     notify.Config
+	notifySuccess bool       // whether a verified trigger success also sends a Discord alert
+	authMu        sync.Mutex // guards authNotified, written from each target's goroutine
+	authNotified  map[string]bool
 }
 
 // New builds a scheduler that logs to out. When live is true and out is an
@@ -63,13 +65,14 @@ func New(cfg config.Config, targets []Target, dryRun, live bool, out io.Writer) 
 	}
 	status := newLiveStatus(out, names, live)
 	return &Scheduler{
-		cfg:          cfg,
-		targets:      targets,
-		dryRun:       dryRun,
-		log:          log.New(status, "", log.LstdFlags),
-		live:         status,
-		notifyCfg:    notify.Config{WebhookURL: os.Getenv("DISCORD_WEBHOOK_URL")},
-		authNotified: make(map[string]bool),
+		cfg:           cfg,
+		targets:       targets,
+		dryRun:        dryRun,
+		log:           log.New(status, "", log.LstdFlags),
+		live:          status,
+		notifyCfg:     notify.Config{WebhookURL: os.Getenv("DISCORD_WEBHOOK_URL")},
+		notifySuccess: envBoolDefaultTrue("DISCORD_NOTIFY_ON_SUCCESS"),
+		authNotified:  make(map[string]bool),
 	}
 }
 
@@ -83,6 +86,11 @@ func (s *Scheduler) Run(ctx context.Context) {
 		names, s.cfg.WeeklyThreshold, s.cfg.ResetBuffer.Duration, s.dryRun)
 	if s.notifyCfg.Enabled() {
 		s.log.Printf("discord alerting: enabled")
+		if s.notifySuccess {
+			s.log.Printf("discord success notify: enabled")
+		} else {
+			s.log.Printf("discord success notify: disabled (DISCORD_NOTIFY_ON_SUCCESS=false)")
+		}
 	} else {
 		s.log.Printf("discord alerting: disabled (DISCORD_WEBHOOK_URL not set)")
 	}
@@ -440,4 +448,19 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 	case <-t.C:
 		return true
 	}
+}
+
+// envBoolDefaultTrue reads a boolean environment variable that defaults to
+// true when unset or unparseable — used for DISCORD_NOTIFY_ON_SUCCESS, which
+// should require an explicit opt-out rather than an explicit opt-in.
+func envBoolDefaultTrue(key string) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return true
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return true
+	}
+	return b
 }

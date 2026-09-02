@@ -638,9 +638,22 @@ func TestRun_LogsDiscordAlertingStatus(t *testing.T) {
 	var buf bytes.Buffer
 	s := New(testConfig(), []Target{}, false, false, &buf)
 	s.notifyCfg = notify.Config{WebhookURL: "https://discord.test/webhook"}
+	s.notifySuccess = true
 	s.Run(context.Background())
 	if got := buf.String(); !strings.Contains(got, "discord alerting: enabled") {
 		t.Fatalf("log output = %q, want it to contain %q", got, "discord alerting: enabled")
+	}
+	if got := buf.String(); !strings.Contains(got, "discord success notify: enabled") {
+		t.Fatalf("log output = %q, want it to contain %q", got, "discord success notify: enabled")
+	}
+
+	buf.Reset()
+	s = New(testConfig(), []Target{}, false, false, &buf)
+	s.notifyCfg = notify.Config{WebhookURL: "https://discord.test/webhook"}
+	s.notifySuccess = false
+	s.Run(context.Background())
+	if got := buf.String(); !strings.Contains(got, "discord success notify: disabled (DISCORD_NOTIFY_ON_SUCCESS=false)") {
+		t.Fatalf("log output = %q, want it to contain %q", got, "discord success notify: disabled (DISCORD_NOTIFY_ON_SUCCESS=false)")
 	}
 
 	buf.Reset()
@@ -680,5 +693,47 @@ func TestRunTarget_GenericReadError_DoesNotTriggerNotify(t *testing.T) {
 	case <-done:
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("runTarget did not stop after cancellation")
+	}
+}
+
+func TestEnvBoolDefaultTrue(t *testing.T) {
+	const key = "TEST_ENV_BOOL_DEFAULT_TRUE"
+	cases := []struct {
+		name string
+		val  string
+		want bool
+	}{
+		{"empty/unset defaults true", "", true},
+		{"true", "true", true},
+		{"TRUE uppercase", "TRUE", true},
+		{"1", "1", true},
+		{"false", "false", false},
+		{"FALSE uppercase", "FALSE", false},
+		{"0", "0", false},
+		{"invalid value defaults true", "not-a-bool", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(key, tc.val)
+			if got := envBoolDefaultTrue(key); got != tc.want {
+				t.Fatalf("envBoolDefaultTrue(%q) = %v, want %v", tc.val, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNew_ReadsNotifySuccessFromEnv(t *testing.T) {
+	p := &stubProvider{usage: &usage.Usage{}}
+
+	t.Setenv("DISCORD_NOTIFY_ON_SUCCESS", "")
+	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
+	if !s.notifySuccess {
+		t.Fatal("notifySuccess should default to true when DISCORD_NOTIFY_ON_SUCCESS is unset")
+	}
+
+	t.Setenv("DISCORD_NOTIFY_ON_SUCCESS", "false")
+	s = New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
+	if s.notifySuccess {
+		t.Fatal("notifySuccess should be false when DISCORD_NOTIFY_ON_SUCCESS=false")
 	}
 }
