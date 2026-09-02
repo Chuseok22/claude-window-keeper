@@ -92,8 +92,10 @@ Codex/Spark 자격증명(`~/.codex/auth.json`)은 이 워크플로우의 대상�
 - 멀티스테이지: `golang:1.25-bookworm`으로 빌드 → `node:22-bookworm-slim`(Debian bookworm의 apt nodejs가
   v18이라 `@anthropic-ai/claude-code`의 `engines.node >=22` 요구사항을 못 맞춰서 이 베이스 이미지를 씀)에
   `@anthropic-ai/claude-code`, `@openai/codex`를 npm으로 설치.
-- 컨테이너는 UID **1001**(`keeper` 유저)로 돕니다 — `node:22-bookworm-slim` 베이스 이미지가 이미 UID 1000을
-  자체 `node` 유저로 쓰고 있어서 1001을 씀.
+- 컨테이너는 UID **1026**(`keeper` 유저)로 돕니다 — `node:22-bookworm-slim` 베이스 이미지가 이미 UID 1000을
+  자체 `node` 유저로 쓰고 있어서 그 값은 피해야 합니다. 최초에는 1001을 썼으나, 2026-09-03 실제 NAS 배포
+  중 Synology Btrfs ACL이 이 UID의 소유자를 "not found"로 처리해 `chown`으로 소유권을 맞춰도 `owner@` ACE가
+  전혀 매칭되지 않는 문제(컨테이너가 `~/.config/`조차 못 만들고 즉시 crash-loop)가 발견돼 1026으로 교체했습니다.
 - `entrypoint.sh`가 `/app/.env`가 있으면 `set -a; . /app/.env; set +a`로 소싱한 뒤 바이너리를 exec합니다.
 - `.env`는 **의도적으로 이미지에 구워집니다** (아래 시크릿 섹션 참고). `COPY .env* /app/`(와일드카드 —
   파일이 없어도 빌드가 안 깨짐, `COPY .env /app/.env`처럼 정확한 파일명을 쓰면 없을 때 빌드가 실패함).
@@ -123,7 +125,14 @@ README에 명시적으로 안 써있는 게 [Issue #4](https://github.com/Chuseo
 
 ## 자격증명 볼륨 권한
 
-컨테이너는 UID 1001로 돕니다. NAS 쪽 볼륨 디렉터리를 `sudo mkdir -p`로 만들면 root 소유가 되므로, **반드시
-`sudo chown -R 1001:1001 <볼륨 경로>`를 해줘야** 컨테이너가 자격증명 파일을 읽고 쓸 수 있습니다(README의
+컨테이너는 UID 1026으로 돕니다. NAS 쪽 볼륨 디렉터리를 `sudo mkdir -p`로 만들면 root 소유가 되므로, **반드시
+`sudo chown -R 1026:1026 <볼륨 경로>`를 해줘야** 컨테이너가 자격증명 파일을 읽고 쓸 수 있습니다(README의
 "How it deploys" 섹션에 이 단계가 명시돼 있습니다 — 빠뜨리면 인증이 조용히 영원히 실패하고, 알림도 안 옵니다.
 이유: 권한 에러는 `AuthExpiredError`가 아니라서 Discord 알림 조건에 안 걸립니다).
+
+**Synology NAS라면 `chown`만으로 안 끝날 수 있습니다.** Btrfs 볼륨의 공유 폴더에 Windows ACL(NFSv4 스타일)이
+걸려 있으면, `chown`으로 POSIX 소유권을 바꿔도 ACL이 그걸 무시하고 우선 적용됩니다 — 특히 대상 UID가 DSM에
+등록된 계정이 아니면(`synoacltool -get <경로>`로 확인 시 `Owner: (user) not found`) 소유자용 ACE(`owner@`)가
+아예 매칭되지 않아 `stat`조차 EACCES로 실패하는 걸 실제로 겪었습니다(2026-09-03). 이 경우 `sudo
+/usr/syno/bin/synoacltool -get <경로>`로 ACL을 확인하고, 필요하면 `sudo find <볼륨 경로> -exec
+/usr/syno/bin/synoacltool -del {} \;`로 ACL을 걷어내서 기본 POSIX 권한(대개 이미 777)만 남기세요.
