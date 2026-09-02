@@ -71,6 +71,9 @@ container — no restart or redeploy needed, though the watch loop's own retry c
 cap (10 minutes) before it actually recovers the window. See `.claude/rules/20-cicd-deployment.md` for why
 it's a separate, manually-triggered workflow instead of being folded into the deploy pipeline. Codex/Spark
 credentials (`~/.codex/auth.json`) still go through the manual scp above; this workflow only covers Claude.
+Once the run succeeds, delete the secret (`gh secret delete CLAUDE_CREDENTIALS_JSON`) — a stale value left
+sitting in a public repo's secret store is a real credential-rotation hazard if the workflow is ever
+accidentally re-run later.
 
 Discord alerting (sent once per provider per process run, the first time that provider's OAuth refresh token is
 rejected outright — the in-memory dedupe resets on restart) is configured via the `ENV_FILE` GitHub Secret — set

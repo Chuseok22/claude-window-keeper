@@ -55,7 +55,10 @@ Claude Code의 OAuth refresh token이 완전히 만료되면(`AuthExpiredError`,
 사용 절차: 로컬에서 `claude` CLI로 재로그인 → `gh secret set CLAUDE_CREDENTIALS_JSON <
 ~/.claude/.credentials.json`으로 secret 갱신 → GitHub Actions 탭에서 이 워크플로우를 수동 실행. SSH 접속은
 `PROJECT-GO-SIMPLE-CICD.yaml`과 동일한 secret(`SERVER_HOST`/`SERVER_USER`/`SERVER_PASSWORD`/`SSH_KEY`)을
-재사용하므로 새로 등록할 secret은 `CLAUDE_CREDENTIALS_JSON` 하나뿐입니다.
+재사용하므로 새로 등록할 secret은 `CLAUDE_CREDENTIALS_JSON` 하나뿐입니다. 실행이 성공하면 `gh secret delete
+CLAUDE_CREDENTIALS_JSON`으로 secret을 즉시 삭제합니다 — 나중에 이 워크플로우가 실수로 재실행되면 그 시점의
+secret 값이 그대로 NAS에 반영되는데, 이미 회전됐거나 오래된 토큰일 수 있어 인증을 오히려 깨뜨릴 수 있기
+때문입니다.
 
 **의도적으로 trunk-based 배포 파이프라인과 분리되어 있습니다.** 매 `main` push마다 자동 실행되면, 컨테이너가
 이미 refresh해서 최신 상태인 토큰을 이 워크플로우에 저장된 구버전 secret 값으로 덮어써버릴 위험이 있기
@@ -68,6 +71,10 @@ Claude Code의 OAuth refresh token이 완전히 만료되면(`AuthExpiredError`,
 파일이 올바르게 반영됐는지 검증합니다. 단, 이 검증은 파일이 정상인지만 확인할 뿐이며, `watch` 데몬 자체가
 실제로 재시도해서 window를 복구하는 데는 백오프 상한(`internal/scheduler/scheduler.go`의 `maxBackoff`,
 10분)만큼 지연될 수 있습니다.
+
+파일을 덮어쓰기 전에 기존 자격증명을 `.credentials.json.bak`으로 백업하고, NAS 경로는 하드코딩된 값 대신
+실행 중인 컨테이너의 실제 볼륨 마운트에서 가져옵니다 — 검증이 실패하면 SSH로 접속해 `.bak` 파일을 원래
+이름으로 되돌려 복구할 수 있습니다.
 
 Codex/Spark 자격증명(`~/.codex/auth.json`)은 이 워크플로우의 대상이 아닙니다 — 지금까지처럼 수동 `scp`로
 옮깁니다.
