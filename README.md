@@ -70,6 +70,12 @@ fix it. This is not entirely silent: `watch`'s startup log records `discord aler
 (DISCORD_WEBHOOK_URL not set)`, so `docker logs` shows the misconfiguration even though no Discord message goes
 out.
 
+The DockerHub repository this image gets pushed to must be **private**. `ENV_FILE`'s contents
+(`DISCORD_WEBHOOK_URL`, and anything else baked in this way) end up sitting in the image's layers — a public
+repo would let anyone who pulls the image extract the webhook URL with `docker run --entrypoint cat <image>
+/app/.env`. Nothing in code or CI enforces this; keeping the DockerHub repo private is a manual requirement
+you're responsible for.
+
 The same webhook also sends one message when a trigger's post-ping verification confirms the 5-hour window
 actually started (provider name, next reset time, and token/cost if the CLI reported any) — useful for
 confirming the daemon is actually working during early operation. This is on by default; set
@@ -80,7 +86,11 @@ takes a new build+deploy (this repo's CI/CD is trunk-based, so pushing to `main`
 enough).
 
 For local development, `docker build -t claude-window-keeper:local .` and `docker run --rm
-claude-window-keeper:local <command>` work without any of the above.
+claude-window-keeper:local <command>` work without any of the above. One caveat: `.dockerignore` deliberately
+does **not** exclude `.env` (CI's generated one needs to reach the build context), so if a real `.env` with
+actual secrets happens to be sitting in the repo root when you run that `docker build`, those secrets get baked
+into the local image exactly the same way the CI-built one does. Don't push a locally-built image anywhere, and
+don't leave one lying around if it was built with real secrets in `.env`.
 
 ## How it works
 
@@ -121,6 +131,6 @@ README stays in English so it's easier to diff against the upstream
 
 Provider selection, prompts, models, and scheduling knobs (`weekly_threshold`, `reset_buffer`, `auto_redeem`, …)
 live in `config.toml` — see `claude-window-keeper config init` for a fully commented default, and
-`claude-window-keeper config path` for where it's read from. Discord alerting is the one exception: it's read
-from the `DISCORD_WEBHOOK_URL` environment variable only, never from `config.toml`, so it can be set as a
-deploy-time secret instead of a checked-in file.
+`claude-window-keeper config path` for where it's read from. Discord alerting is the exception: `DISCORD_WEBHOOK_URL`
+and `DISCORD_NOTIFY_ON_SUCCESS` are both read from environment variables only, never from `config.toml`, so
+they can be set as deploy-time secrets instead of a checked-in file.
