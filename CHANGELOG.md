@@ -1,7 +1,21 @@
 # Changelog
 
-**현재 버전:** 0.11.0  
-**마지막 업데이트:** 2026-09-02T06:47:56Z  
+**현재 버전:** 0.12.0  
+**마지막 업데이트:** 2026-09-02T09:44:04Z  
+
+---
+
+## [0.12.0] - 2026-09-02
+
+**✨ 기능**
+- add optional provider arg to status command
+
+**🐛 수정**
+- address PR #21 review findings in credentials sync workflow
+- address final review findings in Claude credentials sync workflow
+
+**🔧 변경사항**
+- add manual workflow to sync Claude OAuth credentials to NAS
 
 ---
 
