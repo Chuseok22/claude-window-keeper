@@ -28,9 +28,11 @@ for the full relationship. Scope has been narrowed to run as a single Docker con
   quota — only the deliberate trigger ping does.
 - **Triggers through the official CLIs.** No private/undocumented request shapes for the actual "start a
   session" step — it shells out to the same `claude` / `codex` binaries you'd run by hand.
-- **One alert, for one failure mode.** A Discord message is sent only when a provider's OAuth refresh token is
-  outright rejected — i.e. you need to log back in on that provider. Everything else (rate limits, transient
-  network errors) is handled silently by the retry/backoff logic in the watch loop.
+- **Two Discord alerts, both non-blocking.** A message is sent when a provider's OAuth refresh token is outright
+  rejected — i.e. you need to log back in on that provider — and, on by default, when a trigger's window
+  verification confirms a new 5-hour window actually started (set `DISCORD_NOTIFY_ON_SUCCESS=false` to turn the
+  latter off). Everything else (rate limits, transient network errors) is handled silently by the retry/backoff
+  logic in the watch loop.
 - **Three independent providers.** `claude` and `codex` are enabled by default; `spark` (a second Codex-backed
   target) is off by default so it doesn't add another quota-consuming ping until you opt in.
 

@@ -38,8 +38,9 @@ type Provider interface {
 - **`provider.ClaudeSubscriptionAccessError`** (`internal/provider/claude.go`) — 조직/계정이 구독 자체를
   비활성화한 경우. 토큰은 멀쩡한데 접근이 막힌 상태.
 - **`provider.AuthExpiredError`** (`internal/provider/provider.go`) — refresh token이 **완전히 죽어서**
-  (`auth.ErrRefreshRejected`, HTTP 400/401 응답으로 판정) 사람이 재로그인해야 하는 상태. **이것만** Discord
-  알림을 트리거합니다.
+  (`auth.ErrRefreshRejected`, HTTP 400/401 응답으로 판정) 사람이 재로그인해야 하는 상태. 이 두 에러 타입 중에서는
+  **`AuthExpiredError`만** 인증 실패 Discord 알림을 트리거합니다(`ClaudeSubscriptionAccessError`는 트리거하지
+  않음). 트리거 *성공* 알림은 이것과 별개 조건으로 발송됩니다 — 아래 "Discord 알림" 섹션 참고.
 
 ```go
 // internal/provider/provider.go
@@ -50,14 +51,15 @@ type AuthExpiredError struct{ Err error }
 
 ```go
 type Scheduler struct {
-    cfg          config.Config
-    targets      []Target
-    dryRun       bool
-    log          *log.Logger
-    live         *liveStatus
-    notifyCfg    notify.Config          // os.Getenv("DISCORD_WEBHOOK_URL")로 구성, config.toml 아님
-    authMu       sync.Mutex             // authNotified 보호 — target별 goroutine이 동시에 씀
-    authNotified map[string]bool
+    cfg           config.Config
+    targets       []Target
+    dryRun        bool
+    log           *log.Logger
+    live          *liveStatus
+    notifyCfg     notify.Config          // os.Getenv("DISCORD_WEBHOOK_URL")로 구성, config.toml 아님
+    notifySuccess bool                   // envBoolDefaultTrue("DISCORD_NOTIFY_ON_SUCCESS")로 구성, 기본 true
+    authMu        sync.Mutex             // authNotified 보호 — target별 goroutine이 동시에 씀
+    authNotified  map[string]bool
 }
 ```
 
