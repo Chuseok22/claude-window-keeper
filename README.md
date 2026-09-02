@@ -5,7 +5,7 @@
 # claude-window-keeper
 
 <!-- AUTO-VERSION-SECTION: DO NOT EDIT MANUALLY -->
-## Latest Version : v0.10.7 (2026-09-02)
+## Latest Version : v0.11.0 (2026-09-02)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/Chuseok22/claude-window-keeper/actions/workflows/PROJECT-GO-CI.yaml/badge.svg)](https://github.com/Chuseok22/claude-window-keeper/actions/workflows/PROJECT-GO-CI.yaml)
@@ -60,6 +60,20 @@ won't be able to read or write its own credentials:
 ```sh
 sudo chown -R 1001:1001 /volume1/project/claude-window-keeper/home
 ```
+
+After that first manual copy, if a refresh token later dies outright (an `AuthExpiredError` Discord alert
+fires), you don't have to repeat the scp dance — re-run `claude` CLI login locally, then
+`gh secret set CLAUDE_CREDENTIALS_JSON < ~/.claude/.credentials.json` and manually trigger the
+`SYNC-CLAUDE-CREDENTIALS` GitHub Actions workflow (`workflow_dispatch` only — it never runs on a normal `main`
+push). It reuses the same SSH secrets as the deploy workflow, writes the file to the NAS with the right
+ownership/permissions, and verifies the file landed correctly by running `status claude` inside the
+container — no restart or redeploy needed, though the watch loop's own retry can still lag up to its backoff
+cap (10 minutes) before it actually recovers the window. See `.claude/rules/20-cicd-deployment.md` for why
+it's a separate, manually-triggered workflow instead of being folded into the deploy pipeline. Codex/Spark
+credentials (`~/.codex/auth.json`) still go through the manual scp above; this workflow only covers Claude.
+Once the run succeeds, delete the secret (`gh secret delete CLAUDE_CREDENTIALS_JSON`) — a stale value left
+sitting in a public repo's secret store is a real credential-rotation hazard if the workflow is ever
+accidentally re-run later.
 
 Discord alerting (sent once per provider per process run, the first time that provider's OAuth refresh token is
 rejected outright — the in-memory dedupe resets on restart) is configured via the `ENV_FILE` GitHub Secret — set

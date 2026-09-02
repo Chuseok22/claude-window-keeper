@@ -1,13 +1,44 @@
 {
   "metadata": {
-    "lastUpdated": "2026-09-02T06:47:56Z",
-    "currentVersion": "0.11.0",
+    "lastUpdated": "2026-09-02T09:44:04Z",
+    "currentVersion": "0.12.0",
     "projectTypes": [
       "go"
     ],
-    "totalReleases": 9
+    "totalReleases": 10
   },
   "releases": [
+    {
+      "version": "0.12.0",
+      "project_types": [
+        "go"
+      ],
+      "date": "2026-09-02",
+      "pr_number": null,
+      "raw_summary": "## [0.12.0]\n\n### ✨ 기능\n- add optional provider arg to status command\n\n### 🐛 수정\n- address PR #21 review findings in credentials sync workflow\n- address final review findings in Claude credentials sync workflow\n\n### 🔧 변경사항\n- add manual workflow to sync Claude OAuth credentials to NAS",
+      "parsed_changes": {
+        "기능": {
+          "title": "✨ 기능",
+          "items": [
+            "add optional provider arg to status command"
+          ]
+        },
+        "수정": {
+          "title": "🐛 수정",
+          "items": [
+            "address PR #21 review findings in credentials sync workflow",
+            "address final review findings in Claude credentials sync workflow"
+          ]
+        },
+        "변경사항": {
+          "title": "🔧 변경사항",
+          "items": [
+            "add manual workflow to sync Claude OAuth credentials to NAS"
+          ]
+        }
+      },
+      "parse_method": "markdown"
+    },
     {
       "version": "0.11.0",
       "project_types": [
