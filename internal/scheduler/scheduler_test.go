@@ -19,12 +19,13 @@ import (
 )
 
 type stubProvider struct {
-	mu       sync.Mutex
-	usage    *usage.Usage
-	readErr  error
-	trigErr  error
-	reads    int
-	triggers int
+	mu                sync.Mutex
+	usage             *usage.Usage
+	readErr           error
+	trigErr           error
+	reads             int
+	triggers          int
+	activateOnTrigger bool // when true, Trigger() flips FiveHour to active, simulating a real window start
 }
 
 func (p *stubProvider) Name() string { return "stub" }
@@ -45,6 +46,10 @@ func (p *stubProvider) Trigger(context.Context, bool) (*provider.TriggerResult, 
 	p.triggers++
 	if p.trigErr != nil {
 		return nil, p.trigErr
+	}
+	if p.activateOnTrigger {
+		p.usage.FiveHour.UsedPercent = 1
+		p.usage.FiveHour.ResetsAt = time.Now().Add(5 * time.Hour)
 	}
 	return &provider.TriggerResult{Command: "stub trigger"}, nil
 }
@@ -408,6 +413,85 @@ func TestRunTarget_VerifyFailureCap_StopsRetriggeringAfterMaxFailures(t *testing
 	}
 }
 
+// TestRunTarget_NotifiesOnSuccessfulVerification proves that once a trigger's
+// post-ping verification confirms the window is active, the scheduler sends
+// exactly one Discord success notification (see notifyTriggerSucceeded).
+func TestRunTarget_NotifiesOnSuccessfulVerification(t *testing.T) {
+	rt := swapDefaultHTTPClientForTest(t)
+	t.Setenv("DISCORD_WEBHOOK_URL", "https://discord.test/webhook")
+	t.Setenv("DISCORD_NOTIFY_ON_SUCCESS", "true")
+
+	p := &stubProvider{
+		usage:             &usage.Usage{FiveHour: usage.Window{WindowSeconds: 18000}},
+		activateOnTrigger: true,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.runTarget(ctx, Target{Provider: p})
+	}()
+	defer func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("runTarget did not stop after cancellation")
+		}
+	}()
+
+	waitFor(t, postPingGrace+10*time.Second, func() bool {
+		return rt.Count() >= 1
+	})
+	time.Sleep(50 * time.Millisecond)
+	if got := rt.Count(); got != 1 {
+		t.Fatalf("success notify calls = %d, want exactly 1", got)
+	}
+}
+
+// TestRunTarget_SuccessNotifyDisabled_SendsNoNotification proves that
+// DISCORD_NOTIFY_ON_SUCCESS=false suppresses the success notification even
+// though the trigger verifies successfully.
+func TestRunTarget_SuccessNotifyDisabled_SendsNoNotification(t *testing.T) {
+	rt := swapDefaultHTTPClientForTest(t)
+	t.Setenv("DISCORD_WEBHOOK_URL", "https://discord.test/webhook")
+	t.Setenv("DISCORD_NOTIFY_ON_SUCCESS", "false")
+
+	p := &stubProvider{
+		usage:             &usage.Usage{FiveHour: usage.Window{WindowSeconds: 18000}},
+		activateOnTrigger: true,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := New(testConfig(), []Target{{Provider: p}}, false, false, io.Discard)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.runTarget(ctx, Target{Provider: p})
+	}()
+	defer func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("runTarget did not stop after cancellation")
+		}
+	}()
+
+	// Wait for the trigger and its post-ping verification read (the 2nd
+	// ReadUsage call) to actually happen, so a 0 count below proves the
+	// toggle suppressed the notification rather than the trigger simply
+	// never firing.
+	waitFor(t, postPingGrace+10*time.Second, func() bool {
+		reads, _ := p.counts()
+		return reads >= 2
+	})
+	time.Sleep(50 * time.Millisecond)
+	if got := rt.Count(); got != 0 {
+		t.Fatalf("success notify calls with toggle off = %d, want 0", got)
+	}
+}
+
 func TestNextBackoff(t *testing.T) {
 	if got := nextBackoff(minBackoff); got != time.Minute {
 		t.Fatalf("nextBackoff(30s) = %v, want 1m", got)
@@ -526,6 +610,34 @@ func TestNotifyAuthExpired_OncePerEpisode_ThenResetOnSuccess(t *testing.T) {
 	s.notifyAuthExpired("claude", authErr)
 	if got := rt.Count(); got != 2 {
 		t.Fatalf("notify calls after reset = %d, want 2 (one more, for the new episode)", got)
+	}
+}
+
+func TestNotifyTriggerSucceeded_RespectsToggleAndWebhookConfig(t *testing.T) {
+	rt := swapDefaultHTTPClientForTest(t)
+	w := usage.Window{ResetsAt: time.Now().Add(5 * time.Hour)}
+	res := &provider.TriggerResult{HasUsage: true, TotalTokens: 100, InputTokens: 90, OutputTokens: 10, CostUSD: 0.011}
+
+	// Toggle off: never sends, even with a webhook configured.
+	s := &Scheduler{notifyCfg: notify.Config{WebhookURL: "https://discord.test/webhook"}, notifySuccess: false}
+	s.notifyTriggerSucceeded("claude", w, res)
+	if got := rt.Count(); got != 0 {
+		t.Fatalf("notify calls with toggle off = %d, want 0", got)
+	}
+
+	// Toggle on, webhook configured: sends exactly once.
+	s = &Scheduler{notifyCfg: notify.Config{WebhookURL: "https://discord.test/webhook"}, notifySuccess: true}
+	s.notifyTriggerSucceeded("claude", w, res)
+	if got := rt.Count(); got != 1 {
+		t.Fatalf("notify calls with toggle on = %d, want 1", got)
+	}
+
+	// Toggle on but no webhook: notify.Notify no-ops internally (Config.Enabled()
+	// is false), so the count must not increase further.
+	s = &Scheduler{notifyCfg: notify.Config{}, notifySuccess: true}
+	s.notifyTriggerSucceeded("claude", w, res)
+	if got := rt.Count(); got != 1 {
+		t.Fatalf("notify calls with no webhook configured = %d, want still 1 (no-op)", got)
 	}
 }
 

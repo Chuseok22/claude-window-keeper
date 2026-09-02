@@ -334,6 +334,7 @@ func (s *Scheduler) runTarget(ctx context.Context, t Target) {
 		verifyBackoff = minBackoff
 		backoff = minBackoff
 		s.log.Printf("[%s] window verified active", name)
+		s.notifyTriggerSucceeded(name, vu.FiveHour, res)
 	}
 }
 
@@ -377,6 +378,21 @@ func (s *Scheduler) notifyAuthExpired(name string, err error) {
 	if nerr := notify.Notify(s.notifyCfg, name+": 인증이 만료됐습니다 — 다시 로그인해 주세요",
 		"자격증명 파일을 갱신할 때까지 재시도만 계속합니다.\n"+err.Error()); nerr != nil {
 		s.log.Printf("[%s] discord 알림 전송 실패: %v", name, nerr)
+	}
+}
+
+// notifyTriggerSucceeded sends a Discord alert confirming a provider's 5h
+// window was verified active after a trigger. Gated by notifySuccess
+// (DISCORD_NOTIFY_ON_SUCCESS, default true — see New()). Like
+// notifyAuthExpired, a failed send is logged and never retried; it must
+// never block the watch loop.
+func (s *Scheduler) notifyTriggerSucceeded(name string, w usage.Window, res *provider.TriggerResult) {
+	if !s.notifySuccess {
+		return
+	}
+	msg := fmt.Sprintf("다음 리셋 예정: %s%s", w.ResetsAt.Local().Format("15:04:05"), triggerCost(res))
+	if nerr := notify.Notify(s.notifyCfg, name+": 5시간 세션이 시작됐습니다", msg); nerr != nil {
+		s.log.Printf("[%s] discord 성공 알림 전송 실패: %v", name, nerr)
 	}
 }
 
