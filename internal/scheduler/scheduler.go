@@ -424,7 +424,9 @@ func (s *Scheduler) setAuthNotified(name string, v bool) {
 }
 
 // triggerCost renders the token/cost tail for logs, e.g.
-// " — 32934 tok (in 32792 / out 142), $0.0110".
+// " — 32934 tok (in 32792 / out 142), $0.0110". Keep in sync with
+// notifyTriggerSucceeded's Korean-worded rendering of the same fields for
+// the Discord success notification.
 func triggerCost(res *provider.TriggerResult) string {
 	if res == nil || !res.HasUsage {
 		return ""

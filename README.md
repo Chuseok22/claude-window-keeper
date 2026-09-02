@@ -72,7 +72,10 @@ The same webhook also sends one message when a trigger's post-ping verification 
 actually started (provider name, next reset time, and token/cost if the CLI reported any) — useful for
 confirming the daemon is actually working during early operation. This is on by default; set
 `DISCORD_NOTIFY_ON_SUCCESS=false` in the `ENV_FILE` secret to turn it off once you've confirmed things are
-stable. Like the auth-failure alert, this is also read once at container startup.
+stable. Like `DISCORD_WEBHOOK_URL`, this is baked into the image at build time and read once at container
+startup — a plain `docker restart` reuses the same image and will NOT pick up a changed secret. Turning it off
+takes a new build+deploy (this repo's CI/CD is trunk-based, so pushing to `main` after updating the secret is
+enough).
 
 For local development, `docker build -t claude-window-keeper:local .` and `docker run --rm
 claude-window-keeper:local <command>` work without any of the above.

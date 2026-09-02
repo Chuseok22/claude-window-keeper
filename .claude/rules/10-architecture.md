@@ -86,7 +86,7 @@ func Notify(cfg Config, title, message string) error  // 실패 시 error 반환
 `.env` 기반 시크릿 전달을 이미 갖고 있어서 거기 맞춘 설계입니다 (자세한 내용은 `20-cicd-deployment.md`).
 **`config.toml`에 Discord 관련 필드를 추가하려는 시도가 있으면 의도적으로 피한 설계임을 알려주세요.**
 
-알림은 인증 완전 실패 하나만, 같은 provider가 실패 상태인 동안 최초 1회만 보냅니다(`authNotified` map으로
+인증 완전 실패 알림은, 같은 provider가 실패 상태인 동안 최초 1회만 보냅니다(`authNotified` map으로
 추적, `ReadUsage` 성공 시 리셋). 실패한 전송은 `Notify()`가 반환한 error를 `notifyAuthExpired` 호출부가
 `s.log`에 남기며, 재시도는 하지 않습니다 — watch 루프를 막지 않는 게 우선입니다.
 

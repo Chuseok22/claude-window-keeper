@@ -19,6 +19,7 @@ macOS/Linux/Windows 크로스플랫폼으로 로컬 대화형 사용까지 지�
 - Claude/Codex/Spark 5h window를 끊김 없이 이어붙인다.
 - 사람 개입 없이 24/7 무인 운영된다.
 - 인증이 완전히 죽으면(재로그인 필요) Discord로 프로세스 실행 중 provider당 딱 한 번 알린다(`authNotified`가 인메모리 상태라 재시작하면 다시 알림 가능).
+- 트리거 후 5h window가 실제로 검증됐을 때도 Discord로 알린다(환경변수 `DISCORD_NOTIFY_ON_SUCCESS`로 토글 가능, 기본 켜짐 — 초기 운영 검증용).
 - 그 외에는 최대한 조용히, 로그만 남기며 동작한다.
 
 ## 비목표 (의도적으로 안 하는 것)

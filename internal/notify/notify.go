@@ -1,6 +1,8 @@
 // Package notify sends a Discord message via an incoming webhook. It is the
-// sole alerting channel for this daemon — used only when a provider's OAuth
-// refresh token is definitively rejected, i.e. a human needs to log back in.
+// sole alerting channel for this daemon — used when a provider's OAuth
+// refresh token is definitively rejected (i.e. a human needs to log back
+// in), and also when a trigger's window verification succeeds (see
+// Scheduler.notifyTriggerSucceeded).
 // Notify never retries and never blocks the watch loop: on failure it
 // returns an error for the caller to log or otherwise surface, but the
 // caller is expected to keep looping regardless.
