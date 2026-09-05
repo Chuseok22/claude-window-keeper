@@ -1,7 +1,17 @@
 # Changelog
 
-**현재 버전:** 0.12.3  
-**마지막 업데이트:** 2026-09-02T16:29:57Z  
+**현재 버전:** 0.12.4  
+**마지막 업데이트:** 2026-09-05T05:35:14Z  
+
+---
+
+## [0.12.4] - 2026-09-05
+
+**🐛 수정**
+- change container UID from 1026 to 65536 (Synology ACL RW verified)
+
+**🔧 변경사항**
+- exclude .blog-drafts from git tracking
 
 ---
 

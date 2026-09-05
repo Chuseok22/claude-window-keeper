@@ -1,13 +1,37 @@
 {
   "metadata": {
-    "lastUpdated": "2026-09-02T16:29:57Z",
-    "currentVersion": "0.12.3",
+    "lastUpdated": "2026-09-05T05:35:14Z",
+    "currentVersion": "0.12.4",
     "projectTypes": [
       "go"
     ],
-    "totalReleases": 13
+    "totalReleases": 14
   },
   "releases": [
+    {
+      "version": "0.12.4",
+      "project_types": [
+        "go"
+      ],
+      "date": "2026-09-05",
+      "pr_number": null,
+      "raw_summary": "## [0.12.4]\n\n### 🐛 수정\n- change container UID from 1026 to 65536 (Synology ACL RW verified)\n\n### 🔧 변경사항\n- exclude .blog-drafts from git tracking",
+      "parsed_changes": {
+        "수정": {
+          "title": "🐛 수정",
+          "items": [
+            "change container UID from 1026 to 65536 (Synology ACL RW verified)"
+          ]
+        },
+        "변경사항": {
+          "title": "🔧 변경사항",
+          "items": [
+            "exclude .blog-drafts from git tracking"
+          ]
+        }
+      },
+      "parse_method": "markdown"
+    },
     {
       "version": "0.12.3",
       "project_types": [
