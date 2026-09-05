@@ -32,3 +32,5 @@ superpowers/
 
 # claude code git worktrees
 .claude/worktrees/
+
+/.blog-drafts
