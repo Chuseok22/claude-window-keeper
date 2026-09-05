@@ -96,12 +96,12 @@ scp ~/.claude/.credentials.json  <nas-user>@<nas-host>:/volume1/project/claude-w
 scp ~/.codex/auth.json           <nas-user>@<nas-host>:/volume1/project/claude-window-keeper/home/.codex/auth.json
 ```
 
-컨테이너는 root가 아니라 비특권 유저(`keeper`, UID 1026)로 돕니다. 배포 워크플로우가 그 호스트 디렉터리를
+컨테이너는 root가 아니라 비특권 유저(`keeper`, UID 65536)로 돕니다. 배포 워크플로우가 그 호스트 디렉터리를
 `sudo mkdir -p`로 만들고, 위 `scp`는 SSH 로그인 유저 권한으로 파일을 내려놓기 때문에 둘 다 root(또는 SSH
 로그인 유저) 소유로 남습니다. 소유권을 맞춰주지 않으면 컨테이너가 자기 자격증명을 읽지도 쓰지도 못합니다:
 
 ```sh
-sudo chown -R 1026:1026 /volume1/project/claude-window-keeper/home
+sudo chown -R 65536:65536 /volume1/project/claude-window-keeper/home
 ```
 
 Synology NAS(Btrfs 볼륨)라면 `chown`만으로 안 풀릴 수 있습니다 — 공유 폴더에 Windows ACL이 걸려 있으면 ACL이

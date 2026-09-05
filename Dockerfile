@@ -18,7 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code @openai/codex \
-    && useradd -m -u 1026 keeper
+    # 65536은 Debian의 기본 UID/GID_MAX(60000)를 넘어서, useradd만으로는 GID가
+    # 자동으로 UID와 안 맞고 엉뚱한 값으로 떨어진다 (경고만 뜨고 실패하진 않음) -
+    # groupadd로 GID를 명시해서 UID:GID를 65536:65536으로 대칭시킨다.
+    && groupadd -g 65536 keeper \
+    && useradd -m -u 65536 -g 65536 keeper
 
 COPY --from=build /out/claude-window-keeper /usr/local/bin/claude-window-keeper
 COPY entrypoint.sh /app/entrypoint.sh

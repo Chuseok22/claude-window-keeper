@@ -92,10 +92,16 @@ Codex/Spark 자격증명(`~/.codex/auth.json`)은 이 워크플로우의 대상�
 - 멀티스테이지: `golang:1.25-bookworm`으로 빌드 → `node:22-bookworm-slim`(Debian bookworm의 apt nodejs가
   v18이라 `@anthropic-ai/claude-code`의 `engines.node >=22` 요구사항을 못 맞춰서 이 베이스 이미지를 씀)에
   `@anthropic-ai/claude-code`, `@openai/codex`를 npm으로 설치.
-- 컨테이너는 UID **1026**(`keeper` 유저)로 돕니다 — `node:22-bookworm-slim` 베이스 이미지가 이미 UID 1000을
-  자체 `node` 유저로 쓰고 있어서 그 값은 피해야 합니다. 최초에는 1001을 썼으나, 2026-09-03 실제 NAS 배포
-  중 Synology Btrfs ACL이 이 UID의 소유자를 "not found"로 처리해 `chown`으로 소유권을 맞춰도 `owner@` ACE가
-  전혀 매칭되지 않는 문제(컨테이너가 `~/.config/`조차 못 만들고 즉시 crash-loop)가 발견돼 1026으로 교체했습니다.
+- 컨테이너는 UID **65536**(`keeper` 유저)로 돕니다. 최초에는 1001을 썼으나, 2026-09-03 실제 NAS 배포 중
+  Synology Btrfs ACL이 이 UID의 소유자를 "not found"로 처리해 `chown`으로 소유권을 맞춰도 `owner@` ACE가
+  전혀 매칭되지 않는 문제(컨테이너가 `~/.config/`조차 못 만들고 즉시 crash-loop)가 발견돼 1026으로 교체했지만,
+  1026도 같은 부류의 owner-not-found 문제를 완전히 피하지 못해 2026-09-05에 65536으로 다시 교체했습니다(NAS에서
+  직접 chown 후 RW 동작을 확인함 — 65536이 DSM에 등록된 특정 계정과 매핑되는 값인지, 아니면 이 NAS의 ACL
+  구현이 이 UID 범위를 다르게 처리하는 것인지는 아직 확인되지 않았습니다). `node:22-bookworm-slim`
+  베이스 이미지가 이미 UID 1000을 자체 `node` 유저로 쓰므로 그 값은 여전히 피해야 합니다. 65536은 Debian
+  기본 UID/GID_MAX(60000)를 넘어서, `useradd -u 65536`만으로는 GID가 자동으로 UID와 맞춰지지 않고 엉뚱한 값(예:
+  1001)으로 떨어집니다(경고만 뜨고 실패하지는 않음) — `Dockerfile`이 `groupadd -g 65536`으로 GID를 먼저 명시해서
+  UID:GID를 65536:65536으로 대칭시킵니다.
 - `entrypoint.sh`가 `/app/.env`가 있으면 `set -a; . /app/.env; set +a`로 소싱한 뒤 바이너리를 exec합니다.
 - `.env`는 **의도적으로 이미지에 구워집니다** (아래 시크릿 섹션 참고). `COPY .env* /app/`(와일드카드 —
   파일이 없어도 빌드가 안 깨짐, `COPY .env /app/.env`처럼 정확한 파일명을 쓰면 없을 때 빌드가 실패함).
@@ -125,8 +131,8 @@ README에 명시적으로 안 써있는 게 [Issue #4](https://github.com/Chuseo
 
 ## 자격증명 볼륨 권한
 
-컨테이너는 UID 1026으로 돕니다. NAS 쪽 볼륨 디렉터리를 `sudo mkdir -p`로 만들면 root 소유가 되므로, **반드시
-`sudo chown -R 1026:1026 <볼륨 경로>`를 해줘야** 컨테이너가 자격증명 파일을 읽고 쓸 수 있습니다(README의
+컨테이너는 UID 65536으로 돕니다. NAS 쪽 볼륨 디렉터리를 `sudo mkdir -p`로 만들면 root 소유가 되므로, **반드시
+`sudo chown -R 65536:65536 <볼륨 경로>`를 해줘야** 컨테이너가 자격증명 파일을 읽고 쓸 수 있습니다(README의
 "How it deploys" 섹션에 이 단계가 명시돼 있습니다 — 빠뜨리면 인증이 조용히 영원히 실패하고, 알림도 안 옵니다.
 이유: 권한 에러는 `AuthExpiredError`가 아니라서 Discord 알림 조건에 안 걸립니다).
 
