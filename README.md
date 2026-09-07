@@ -91,7 +91,7 @@ Claude Code / Codex / Spark 구독은 5시간짜리 rolling rate-limit window로
 재사용합니다. 다만 **맥에서 로그인한 파일을 복사해오지 않고, NAS 컨테이너 내부에서 직접 로그인합니다** —
 맥과 같은 refresh token을 공유하면 OAuth의 refresh token rotation 때문에 레이스가 생겨 오히려 더 자주
 로그인이 풀리는 문제가 있었습니다(이슈 #26). 그래서 이 파일들을 맥에서 미리 `scp`로 옮겨둘 필요는 없지만,
-컨테이너가 뜬 뒤 그 안에서 로그인 명령을 실행하려면 볼륨 디렉터리에 쓰기 권한이 있어야 합니다:
+컨테이너가 뜬 뒤 그 안에서 로그인 명령을 실행하려면 볼륨 디렉터리에 쓰기 권한이 있어야 합니다.
 
 컨테이너는 root가 아니라 비특권 유저(`keeper`, UID 65536)로 돕니다. 배포 워크플로우가 그 호스트 디렉터리를
 `sudo mkdir -p`로 만들기 때문에 root 소유로 남습니다. 소유권을 맞춰주지 않으면 컨테이너가 로그인 명령을
@@ -105,6 +105,16 @@ Synology NAS(Btrfs 볼륨)라면 `chown`만으로 안 풀릴 수 있습니다 �
 POSIX 소유권보다 우선 적용되어, 위 `chown`을 했는데도 컨테이너가 `permission denied`로 계속 crash-loop할 수
 있습니다. `sudo /usr/syno/bin/synoacltool -get <경로>`로 확인해보고, 필요하면 `sudo find
 /volume1/project/claude-window-keeper/home -exec /usr/syno/bin/synoacltool -del {} \;`로 ACL을 제거하세요.
+
+소유권/권한이 준비됐으면 아래 두 명령으로 로그인합니다:
+
+```sh
+sudo docker exec -it claude-window-keeper claude setup-token         # Claude
+sudo docker exec -it claude-window-keeper codex login --device-auth  # Codex — Spark도 이걸로 커버됨
+```
+
+각 명령이 출력하는 URL/코드를 아무 기기에서나 열어 승인하면 끝. 로그인 직후 반영 여부 확인과 재시작 불필요
+여부는 아래 "refresh token이 나중에 완전히 죽으면" 절 참고.
 
 ### refresh token이 나중에 완전히 죽으면 — NAS에서 직접 재로그인
 
@@ -133,7 +143,8 @@ sudo docker exec claude-window-keeper claude-window-keeper status codex
 복구됩니다.
 
 **기대 빈도**: 맥과 독립적인 세션이라, 예전처럼 잦고 예측 불가능하게 풀리지 않고 OAuth 세션의 자연 만료
-주기(대략 연 단위로 추정) 정도로만 필요할 것으로 기대합니다.
+주기(대략 연 단위로 추정) 정도로만 필요할 것으로 기대합니다. 다만 이건 추정이며, 실제로는 운영해보면서
+확인해야 합니다.
 
 ### Discord 알림 설정
 

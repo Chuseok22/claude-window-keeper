@@ -45,7 +45,7 @@
 직접 고칠 때는 안 갱신됐습니다. 마법사를 다시 돌려서 재동기화가 일어나면 이 값들이 워크플로우 파일을 덮어쓸
 수도 있으니, 그런 상황이 생기면 이 표를 기준으로 다시 맞춰야 합니다.
 
-## Claude/Codex 자격증명 재동기화 (NAS 독립 로그인)
+## Claude/Codex 자격증명 재로그인 (NAS 독립 로그인)
 
 Claude/Codex의 OAuth refresh token이 완전히 만료되면(`AuthExpiredError`, Discord 알림 발송) 사람이
 재로그인해야 합니다. **이 재로그인은 맥이 아니라 NAS 컨테이너 안에서 직접 수행합니다** — 맥과 자격증명
@@ -55,8 +55,8 @@ Claude/Codex의 OAuth refresh token이 완전히 만료되면(`AuthExpiredError`
 절차:
 
 ```sh
-sudo docker exec -it claude-window-keeper claude setup-token   # Claude
-sudo docker exec -it claude-window-keeper codex login --device-auth   # Codex (Spark 포함, 별도 로그인 불필요)
+sudo docker exec -it claude-window-keeper claude setup-token         # Claude
+sudo docker exec -it claude-window-keeper codex login --device-auth  # Codex (Spark 포함, 별도 로그인 불필요)
 ```
 
 각 명령이 출력하는 URL/코드를 아무 기기에서나 열어 승인하면 끝. GitHub Secret이나 별도 워크플로우를 거치지
