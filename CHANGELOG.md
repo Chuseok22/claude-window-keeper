@@ -1,7 +1,21 @@
 # Changelog
 
-**현재 버전:** 0.12.4  
-**마지막 업데이트:** 2026-09-05T05:35:14Z  
+**현재 버전:** 0.12.5  
+**마지막 업데이트:** 2026-09-07T10:14:14Z  
+
+---
+
+## [0.12.5] - 2026-09-07
+
+**📝 문서**
+- correct Claude login command based on real NAS verification
+- fill deployment login-command gap and polish NAS re-login docs
+- document independent NAS login as the deployment/re-auth procedure
+- replace SYNC-CLAUDE-CREDENTIALS runbook with independent NAS login procedure
+- describe independent NAS login instead of mac-to-nas credential copy
+
+**🔧 변경사항**
+- remove SYNC-CLAUDE-CREDENTIALS workflow (superseded by independent NAS login)
 
 ---
 

@@ -1,13 +1,41 @@
 {
   "metadata": {
-    "lastUpdated": "2026-09-05T05:35:14Z",
-    "currentVersion": "0.12.4",
+    "lastUpdated": "2026-09-07T10:14:14Z",
+    "currentVersion": "0.12.5",
     "projectTypes": [
       "go"
     ],
-    "totalReleases": 14
+    "totalReleases": 15
   },
   "releases": [
+    {
+      "version": "0.12.5",
+      "project_types": [
+        "go"
+      ],
+      "date": "2026-09-07",
+      "pr_number": null,
+      "raw_summary": "## [0.12.5]\n\n### 📝 문서\n- correct Claude login command based on real NAS verification\n- fill deployment login-command gap and polish NAS re-login docs\n- document independent NAS login as the deployment/re-auth procedure\n- replace SYNC-CLAUDE-CREDENTIALS runbook with independent NAS login procedure\n- describe independent NAS login instead of mac-to-nas credential copy\n\n### 🔧 변경사항\n- remove SYNC-CLAUDE-CREDENTIALS workflow (superseded by independent NAS login)",
+      "parsed_changes": {
+        "문서": {
+          "title": "📝 문서",
+          "items": [
+            "correct Claude login command based on real NAS verification",
+            "fill deployment login-command gap and polish NAS re-login docs",
+            "document independent NAS login as the deployment/re-auth procedure",
+            "replace SYNC-CLAUDE-CREDENTIALS runbook with independent NAS login procedure",
+            "describe independent NAS login instead of mac-to-nas credential copy"
+          ]
+        },
+        "변경사항": {
+          "title": "🔧 변경사항",
+          "items": [
+            "remove SYNC-CLAUDE-CREDENTIALS workflow (superseded by independent NAS login)"
+          ]
+        }
+      },
+      "parse_method": "markdown"
+    },
     {
       "version": "0.12.4",
       "project_types": [
