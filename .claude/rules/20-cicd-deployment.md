@@ -45,39 +45,43 @@
 직접 고칠 때는 안 갱신됐습니다. 마법사를 다시 돌려서 재동기화가 일어나면 이 값들이 워크플로우 파일을 덮어쓸
 수도 있으니, 그런 상황이 생기면 이 표를 기준으로 다시 맞춰야 합니다.
 
-## Claude 자격증명 재동기화 (수동, `SYNC-CLAUDE-CREDENTIALS.yaml`)
+## Claude/Codex 자격증명 재로그인 (NAS 독립 로그인)
 
-Claude Code의 OAuth refresh token이 완전히 만료되면(`AuthExpiredError`, Discord 알림 발송) 사람이 로컬에서
-재로그인해야 합니다. 이후 NAS에 반영하는 절차를 `.github/workflows/SYNC-CLAUDE-CREDENTIALS.yaml`
-(`workflow_dispatch`로만 실행, `project-auto-wizard:managed-workflow` 마커 없음 — 마법사가 관리하지 않는 순수
-수동 파일)로 대체할 수 있습니다.
+Claude/Codex의 OAuth refresh token이 완전히 만료되면(`AuthExpiredError`, Discord 알림 발송) 사람이
+재로그인해야 합니다. **이 재로그인은 맥이 아니라 NAS 컨테이너 안에서 직접 수행합니다** — 맥과 자격증명
+파일을 공유하면 refresh token rotation 레이스로 오히려 더 자주 로그아웃되는 문제가 있었기 때문입니다
+(이슈 #26 참고).
 
-사용 절차: 로컬에서 `claude` CLI로 재로그인 → `gh secret set CLAUDE_CREDENTIALS_JSON <
-~/.claude/.credentials.json`으로 secret 갱신 → GitHub Actions 탭에서 이 워크플로우를 수동 실행. SSH 접속은
-`PROJECT-GO-SIMPLE-CICD.yaml`과 동일한 secret(`SERVER_HOST`/`SERVER_USER`/`SERVER_PASSWORD`/`SSH_KEY`)을
-재사용하므로 새로 등록할 secret은 `CLAUDE_CREDENTIALS_JSON` 하나뿐입니다. 실행이 성공하면 `gh secret delete
-CLAUDE_CREDENTIALS_JSON`으로 secret을 즉시 삭제합니다 — 나중에 이 워크플로우가 실수로 재실행되면 그 시점의
-secret 값이 그대로 NAS에 반영되는데, 이미 회전됐거나 오래된 토큰일 수 있어 인증을 오히려 깨뜨릴 수 있기
-때문입니다.
+절차:
 
-**의도적으로 trunk-based 배포 파이프라인과 분리되어 있습니다.** 매 `main` push마다 자동 실행되면, 컨테이너가
-이미 refresh해서 최신 상태인 토큰을 이 워크플로우에 저장된 구버전 secret 값으로 덮어써버릴 위험이 있기
-때문입니다 — 이 워크플로우는 사람이 재로그인 직후에만 의도적으로 트리거해야 합니다.
+```sh
+sudo docker exec -it claude-window-keeper claude                     # Claude
+sudo docker exec -it claude-window-keeper codex login --device-auth  # Codex (Spark 포함, 별도 로그인 불필요)
+```
 
-**컨테이너 재시작이나 재배포는 필요 없습니다.** `internal/provider/provider.go`의 `fetchWithAuth`가 API 401
-응답마다 `Reload()`로 디스크에서 자격증명을 다시 읽으므로(`internal/auth/claude.go`), NAS 파일만 갱신하면
-스케줄러의 다음 재시도 사이클에서 자동으로 새 토큰을 집어 읽습니다. 워크플로우 마지막 스텝이 컨테이너 안에서
-`claude-window-keeper status claude`(`internal/cli/status.go`의 provider 위치 인자)를 실행해 그 자리에서 바로
-파일이 올바르게 반영됐는지 검증합니다. 단, 이 검증은 파일이 정상인지만 확인할 뿐이며, `watch` 데몬 자체가
-실제로 재시도해서 window를 복구하는 데는 백오프 상한(`internal/scheduler/scheduler.go`의 `maxBackoff`,
-10분)만큼 지연될 수 있습니다.
+`claude`는 자격증명이 없으면 실행 즉시 로그인 URL을 출력합니다 — **반드시 `c` 키로 복사**할 것(터미널
+줄바꿈으로 URL을 손으로 긁으면 `code_challenge` 파라미터가 깨져 "잘못된 OAuth 요청" 에러가 남, 2026-09-07
+실제 배포에서 재현/확인됨). 그 URL을 아무 기기 브라우저에 붙여넣어 승인하면 코드가 뜨고, 그 코드를
+터미널의 "Paste code here" 프롬프트에 붙여넣으면 로그인 완료 — 이후 `/exit`나 Ctrl+C로 대화형 세션에서
+나오면 됨. `codex login --device-auth`는 코드를 출력합니다 — 아무 브라우저에서나 그 코드로 승인하면
+됩니다. 둘 다 로컬 브라우저나 SSH 포트포워딩이 필요 없습니다. GitHub Secret이나 별도 워크플로우를 거치지
+않습니다 — 이전에 있던 `SYNC-CLAUDE-CREDENTIALS.yaml`(맥→NAS secret 릴레이용)은 이 방식으로 대체되어
+삭제되었습니다.
 
-파일을 덮어쓰기 전에 기존 자격증명을 `.credentials.json.bak`으로 백업하고, NAS 경로는 하드코딩된 값 대신
-실행 중인 컨테이너의 실제 볼륨 마운트에서 가져옵니다 — 검증이 실패하면 SSH로 접속해 `.bak` 파일을 원래
-이름으로 되돌려 복구할 수 있습니다.
+(`claude setup-token`은 이 용도로 쓰면 안 됩니다 — 자격증명 파일을 쓰지 않고 CI용 1년짜리 토큰을 화면에
+출력만 하며, 그 토큰은 이 프로젝트가 쓰는 `/api/oauth/usage` 엔드포인트에서 403으로 거부됨을 실제로
+확인함.)
 
-Codex/Spark 자격증명(`~/.codex/auth.json`)은 이 워크플로우의 대상이 아닙니다 — 지금까지처럼 수동 `scp`로
-옮깁니다.
+**컨테이너 재시작이나 재배포는 필요 없습니다.** `internal/provider/provider.go`의 `fetchWithAuth`가 API
+401 응답마다 `Reload()`로 디스크에서 자격증명을 다시 읽으므로(`internal/auth/claude.go`,
+`internal/auth/codex.go`), `docker exec`로 새 자격증명을 쓰는 즉시 다음 재시도 사이클에서 자동으로
+집어 읽습니다(백오프 상한만큼, 최대 10분 지연될 수 있음). 로그인 직후
+`sudo docker exec claude-window-keeper claude-window-keeper status claude`로 반영 여부를 바로 확인할 수
+있습니다.
+
+**기대 빈도**: 맥과 독립적인 세션이므로, 예전처럼 잦고 예측 불가능하게 풀리지 않고 OAuth 세션의 자연 만료
+주기(대략 연 단위로 추정) 정도로만 필요할 것으로 기대합니다. 다만 이건 추정이며, 실제로는 운영해보면서
+확인해야 합니다.
 
 ## goreleaser는 없습니다
 
@@ -111,7 +115,7 @@ Codex/Spark 자격증명(`~/.codex/auth.json`)은 이 워크플로우의 대상�
 | 시크릿 | 어디서 오나 | 어떻게 컨테이너에 도달하나 |
 |---|---|---|
 | `DISCORD_WEBHOOK_URL` | GitHub Secret `ENV_FILE`의 내용 (`.env` 형식) | CI가 빌드 직전에 `.env` 파일로 씀 → Dockerfile이 이미지에 구움 → entrypoint.sh가 소싱 |
-| OAuth 자격증명(`.credentials.json`, `auth.json`) | 사람이 다른 머신(맥)에서 로그인 후 수동으로 복사 | 이미지가 아니라 **볼륨 마운트**로만 관리 — 재발급/refresh로 계속 바뀌는 데이터라 이미지에 구우면 안 됨 |
+| OAuth 자격증명(`.credentials.json`, `auth.json`) | NAS 컨테이너 내부에서 `claude`(bare)/`codex login --device-auth`로 직접 로그인(사람이 `docker exec -it`) | 이미지가 아니라 **볼륨 마운트**로만 관리 — 재발급/refresh로 계속 바뀌는 데이터라 이미지에 구우면 안 됨 |
 
 `DISCORD_NOTIFY_ON_SUCCESS`도 이미지에 구워지는 값이다(정적 시크릿은 아니지만 같은 `.env` 경로를 탄다).
 기본값이 `true`(켜짐)이라 이 값을 명시적으로 `.env`/`ENV_FILE`에 넣지 않아도 성공 알림은 그대로 나간다 —

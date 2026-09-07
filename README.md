@@ -85,20 +85,17 @@ Claude Code / Codex / Spark 구독은 5시간짜리 rolling rate-limit window로
 진짜 시크릿이 든 `.env`가 있는 상태로 로컬 빌드를 돌리면 그 내용도 로컬 이미지에 그대로 구워집니다.
 로컬 이미지는 어디에도 push하지 말고, 실제 시크릿이 든 `.env`로 빌드했다면 그 이미지를 남겨두지 마세요.
 
-### 최초 배포 — 자격증명 수동 배치
+### 최초 배포 및 재로그인 — NAS 컨테이너 안에서 직접 로그인
 
-`claude-window-keeper`는 자체 로그인 절차가 없고, Claude Code/Codex CLI가 다른 머신에서 이미 만들어둔
-OAuth 자격증명 파일을 재사용합니다. 이 파일들은 git이나 CI를 절대 거치지 않으므로, 최초 배포 전에 직접
-NAS로 옮겨야 합니다 — 배포 워크플로우가 컨테이너의 `$HOME`으로 마운트하는 경로 아래에:
-
-```sh
-scp ~/.claude/.credentials.json  <nas-user>@<nas-host>:/volume1/project/claude-window-keeper/home/.claude/.credentials.json
-scp ~/.codex/auth.json           <nas-user>@<nas-host>:/volume1/project/claude-window-keeper/home/.codex/auth.json
-```
+`claude-window-keeper`는 자체 로그인 절차가 없고, Claude Code/Codex CLI 공식 로그인 흐름을 그대로
+재사용합니다. 다만 **맥에서 로그인한 파일을 복사해오지 않고, NAS 컨테이너 내부에서 직접 로그인합니다** —
+맥과 같은 refresh token을 공유하면 OAuth의 refresh token rotation 때문에 레이스가 생겨 오히려 더 자주
+로그인이 풀리는 문제가 있었습니다(이슈 #26). 그래서 이 파일들을 맥에서 미리 `scp`로 옮겨둘 필요는 없지만,
+컨테이너가 뜬 뒤 그 안에서 로그인 명령을 실행하려면 볼륨 디렉터리에 쓰기 권한이 있어야 합니다.
 
 컨테이너는 root가 아니라 비특권 유저(`keeper`, UID 65536)로 돕니다. 배포 워크플로우가 그 호스트 디렉터리를
-`sudo mkdir -p`로 만들고, 위 `scp`는 SSH 로그인 유저 권한으로 파일을 내려놓기 때문에 둘 다 root(또는 SSH
-로그인 유저) 소유로 남습니다. 소유권을 맞춰주지 않으면 컨테이너가 자기 자격증명을 읽지도 쓰지도 못합니다:
+`sudo mkdir -p`로 만들기 때문에 root 소유로 남습니다. 소유권을 맞춰주지 않으면 컨테이너가 로그인 명령을
+실행해도 자기 자격증명을 읽지도 쓰지도 못합니다:
 
 ```sh
 sudo chown -R 65536:65536 /volume1/project/claude-window-keeper/home
@@ -109,33 +106,54 @@ POSIX 소유권보다 우선 적용되어, 위 `chown`을 했는데도 컨테이
 있습니다. `sudo /usr/syno/bin/synoacltool -get <경로>`로 확인해보고, 필요하면 `sudo find
 /volume1/project/claude-window-keeper/home -exec /usr/syno/bin/synoacltool -del {} \;`로 ACL을 제거하세요.
 
-### refresh token이 나중에 완전히 죽으면 — `SYNC-CLAUDE-CREDENTIALS` 워크플로우
+소유권/권한이 준비됐으면 아래 두 명령으로 로그인합니다:
 
-최초 배치 이후, Claude의 refresh token이 완전히 만료돼서(`AuthExpiredError`, Discord 알림 발송) 재로그인이
-필요해지면 위 `scp` 절차를 반복할 필요 없이 `.github/workflows/SYNC-CLAUDE-CREDENTIALS.yaml`
-(`workflow_dispatch` 전용 — `main` push로는 절대 실행되지 않음)을 씁니다:
+```sh
+sudo docker exec -it claude-window-keeper claude                     # Claude
+sudo docker exec -it claude-window-keeper codex login --device-auth  # Codex — Spark도 이걸로 커버됨
+```
 
-1. 로컬에서 `claude` CLI로 재로그인
-2. `gh secret set CLAUDE_CREDENTIALS_JSON < ~/.claude/.credentials.json`
-3. GitHub Actions 탭에서 이 워크플로우를 수동 실행(Run workflow)
-4. 실행이 성공하면 즉시 `gh secret delete CLAUDE_CREDENTIALS_JSON`으로 secret을 삭제
+`claude`는 자격증명이 없는 상태에서 실행하면 자동으로 로그인 URL을 출력합니다. **URL을 손으로 긁어서
+복사하지 말고 반드시 `c` 키를 눌러 복사하세요** — 터미널 폭 때문에 URL이 줄바꿈되는 경우가 많은데, 그
+상태로 손으로 선택해서 복사하면 `code_challenge` 파라미터가 깨져 "잘못된 OAuth 요청" 에러가 납니다. `c`는
+터미널의 클립보드 복사 기능(OSC52)으로 줄바꿈 없는 완전한 URL을 복사해줍니다. 그 URL을 아무 기기의
+브라우저에 붙여넣어 승인하면 코드가 뜨는데, 그 코드를 터미널의 "Paste code here" 프롬프트에 붙여넣으면
+로그인이 끝납니다. 이후 `claude`가 대화형 세션으로 넘어가므로 `/exit` 또는 Ctrl+C로 나오면 됩니다.
+`codex login --device-auth`는 코드를 출력합니다 — 아무 브라우저에서나 그 코드로 승인하면 됩니다. 둘 다
+로컬 브라우저나 SSH 포트포워딩이 필요 없습니다. 로그인 직후 반영 여부 확인과 재시작 불필요 여부는 아래
+"refresh token이 나중에 완전히 죽으면" 절 참고.
 
-기존 배포 워크플로우와 같은 SSH secret(`SERVER_HOST`/`SERVER_USER`/`SERVER_PASSWORD`/`SSH_KEY`)을 재사용해
-NAS에 파일을 반영하고, 소유권/권한을 맞추고, 덮어쓰기 전에 기존 파일을 `.bak`으로 백업한 뒤, 컨테이너 안에서
-`status claude`를 실행해 refresh token이 실제로 Anthropic 서버까지 왕복하는지 검증합니다 — 검증이 실패하면
-자동으로 `.bak`을 복원(또는 첫 실행이었다면 새로 쓴 파일을 제거)하고 실패로 끝납니다.
+(참고: `claude setup-token`은 이 용도로 쓰면 안 됩니다 — 이 명령은 자격증명 파일을 쓰지 않고 CI 환경용
+1년짜리 토큰을 화면에 출력만 하며, 이 프로젝트가 쓰는 사용량 조회 엔드포인트에도 호환되지 않습니다.)
+
+### refresh token이 나중에 완전히 죽으면 — NAS에서 직접 재로그인
+
+Claude/Codex의 refresh token이 완전히 만료돼서(`AuthExpiredError`, Discord 알림 발송) 재로그인이
+필요해지면, 최초 배포 때와 동일하게 컨테이너 안에서 직접 로그인합니다:
+
+```sh
+sudo docker exec -it claude-window-keeper claude                     # Claude
+sudo docker exec -it claude-window-keeper codex login --device-auth  # Codex — Spark도 이걸로 커버됨
+```
+
+절차는 위 "최초 배포" 절과 동일합니다(로그인 URL을 `c`로 복사 → 브라우저에서 승인 → 나온 코드를 터미널에
+붙여넣기). GitHub Secret이나 별도 워크플로우도 거치지 않습니다 — 예전에 있던
+`SYNC-CLAUDE-CREDENTIALS.yaml`(맥→NAS secret 릴레이용)은 이 방식으로 대체되어 삭제됐습니다.
+
+로그인 직후 반영 여부를 바로 확인할 수 있습니다:
+
+```sh
+sudo docker exec claude-window-keeper claude-window-keeper status claude
+sudo docker exec claude-window-keeper claude-window-keeper status codex
+```
 
 **컨테이너 재시작/재배포는 필요 없습니다.** API가 401을 받을 때마다 디스크에서 자격증명을 다시 읽으므로,
-NAS 파일만 갱신되면 스케줄러의 다음 재시도 사이클에서 자동으로 복구됩니다(다만 재시도 backoff 상한만큼,
-최대 10분 지연될 수 있습니다).
+로그인하는 즉시(백오프 상한만큼, 최대 10분 지연될 수 있음) 스케줄러의 다음 재시도 사이클에서 자동으로
+복구됩니다.
 
-**왜 배포 파이프라인에 합쳐두지 않고 별도 워크플로우로 뒀는가**: 매 `main` push마다 자동 실행되면, 컨테이너가
-이미 refresh해서 최신 상태인 토큰을 이 워크플로우에 저장된 구버전 secret 값으로 덮어써버릴 위험이 있기
-때문입니다. 그래서 사람이 재로그인 직후에만 의도적으로 트리거하는 수동 워크플로우로 분리했습니다. 4번(secret
-삭제)도 같은 이유입니다 — secret을 지워두지 않으면, 나중에 이 워크플로우가 실수로 재실행될 때(GitHub의
-"Re-run job" 등) 그 시점 secret에 남아있는 오래된/이미 회전된 토큰이 그대로 NAS에 반영돼 인증을 오히려
-깨뜨릴 수 있습니다. Codex/Spark 자격증명(`~/.codex/auth.json`)은 이 워크플로우의 대상이 아니라 지금도 수동
-`scp`로 옮깁니다.
+**기대 빈도**: 맥과 독립적인 세션이라, 예전처럼 잦고 예측 불가능하게 풀리지 않고 OAuth 세션의 자연 만료
+주기(대략 연 단위로 추정) 정도로만 필요할 것으로 기대합니다. 다만 이건 추정이며, 실제로는 운영해보면서
+확인해야 합니다.
 
 ### Discord 알림 설정
 
@@ -164,7 +182,7 @@ Discord 알림은 `config.toml`이 아니라 **환경변수**로만 설정합니
 | 평상시 | window가 리셋될 때마다 자동으로 트리거하고 검증까지 조용히 반복 | 없음 |
 | access token 만료 | API 401 → 디스크 재조회 → 그래도 안 되면 refresh token으로 자동 갱신 | 없음 |
 | weekly 한도 도달 | 해당 provider의 트리거를 weekly window 자체 리셋까지 대기(로그만 남김) | 없음 |
-| refresh token 완전 만료 | `AuthExpiredError` → Discord 알림 1회 → 데몬은 계속 루프를 돌며 재시도만 함(스스로 복구 불가) | 위 "`SYNC-CLAUDE-CREDENTIALS` 워크플로우" 절차 수행 |
+| refresh token 완전 만료 | `AuthExpiredError` → Discord 알림 1회 → 데몬은 계속 루프를 돌며 재시도만 함(스스로 복구 불가) | 위 "refresh token이 나중에 완전히 죽으면" 절차대로 NAS에서 직접 재로그인 |
 | 트리거 성공 검증됨 | Discord로 성공 알림 발송(기본 켜짐) | 없음(끄고 싶으면 `DISCORD_NOTIFY_ON_SUCCESS=false`) |
 | Codex reset credit 보유 | `status`로 확인 가능, 자동 사용은 `auto_redeem` 설정 시에만 | `redeem`으로 수동 사용(비가역적이라 기본은 수동) |
 

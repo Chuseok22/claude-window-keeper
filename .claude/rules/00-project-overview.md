@@ -52,5 +52,10 @@ Codex의 reset-credit 재사용(`redeem` 명령어)도 유지합니다.
 - Docker가 곧 프로세스 supervision(재시작 정책은 아직 없음 — Issue #2)이라, 원본에 있던 자체 데몬 관리
   기능(`bg`)이 필요 없습니다.
 - 인증은 Claude Code/Codex CLI가 이미 만든 자격증명 파일(`~/.claude/.credentials.json`,
-  `~/.codex/auth.json`)을 그대로 재사용합니다. 이 프로젝트는 자체 로그인 절차를 구현하지 않습니다 — 다른
-  머신(맥)에서 로그인한 뒤 파일을 NAS로 복사해서 씁니다.
+  `~/.codex/auth.json`)을 그대로 재사용합니다. 이 프로젝트는 자체 로그인 자동화를 구현하지 않습니다 —
+  대신 NAS 컨테이너 내부에서 `claude`(bare, 로그인 URL을 `c`로 복사 → 브라우저 승인 → 코드 붙여넣기)와
+  `codex login --device-auth`로 직접, 맥과 독립적으로 로그인합니다(`docker exec -it`, 사람이 매번 직접
+  승인 — `claude setup-token`은 자격증명 파일을 안 써서 이 용도로 쓸 수 없음, 2026-09-07 실제 확인).
+  맥과 자격증명 파일을 공유하지 않는 이유는
+  refresh token rotation 레이스 때문 — 자세한 배경은 이슈 #26과
+  `.claude/rules/20-cicd-deployment.md`의 관련 섹션 참고.
