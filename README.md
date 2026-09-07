@@ -109,12 +109,22 @@ POSIX 소유권보다 우선 적용되어, 위 `chown`을 했는데도 컨테이
 소유권/권한이 준비됐으면 아래 두 명령으로 로그인합니다:
 
 ```sh
-sudo docker exec -it claude-window-keeper claude setup-token         # Claude
+sudo docker exec -it claude-window-keeper claude                     # Claude
 sudo docker exec -it claude-window-keeper codex login --device-auth  # Codex — Spark도 이걸로 커버됨
 ```
 
-각 명령이 출력하는 URL/코드를 아무 기기에서나 열어 승인하면 끝. 로그인 직후 반영 여부 확인과 재시작 불필요
-여부는 아래 "refresh token이 나중에 완전히 죽으면" 절 참고.
+`claude`는 자격증명이 없는 상태에서 실행하면 자동으로 로그인 URL을 출력합니다. **URL을 손으로 긁어서
+복사하지 말고 반드시 `c` 키를 눌러 복사하세요** — 터미널 폭 때문에 URL이 줄바꿈되는 경우가 많은데, 그
+상태로 손으로 선택해서 복사하면 `code_challenge` 파라미터가 깨져 "잘못된 OAuth 요청" 에러가 납니다. `c`는
+터미널의 클립보드 복사 기능(OSC52)으로 줄바꿈 없는 완전한 URL을 복사해줍니다. 그 URL을 아무 기기의
+브라우저에 붙여넣어 승인하면 코드가 뜨는데, 그 코드를 터미널의 "Paste code here" 프롬프트에 붙여넣으면
+로그인이 끝납니다. 이후 `claude`가 대화형 세션으로 넘어가므로 `/exit` 또는 Ctrl+C로 나오면 됩니다.
+`codex login --device-auth`는 코드를 출력합니다 — 아무 브라우저에서나 그 코드로 승인하면 됩니다. 둘 다
+로컬 브라우저나 SSH 포트포워딩이 필요 없습니다. 로그인 직후 반영 여부 확인과 재시작 불필요 여부는 아래
+"refresh token이 나중에 완전히 죽으면" 절 참고.
+
+(참고: `claude setup-token`은 이 용도로 쓰면 안 됩니다 — 이 명령은 자격증명 파일을 쓰지 않고 CI 환경용
+1년짜리 토큰을 화면에 출력만 하며, 이 프로젝트가 쓰는 사용량 조회 엔드포인트에도 호환되지 않습니다.)
 
 ### refresh token이 나중에 완전히 죽으면 — NAS에서 직접 재로그인
 
@@ -122,14 +132,13 @@ Claude/Codex의 refresh token이 완전히 만료돼서(`AuthExpiredError`, Disc
 필요해지면, 최초 배포 때와 동일하게 컨테이너 안에서 직접 로그인합니다:
 
 ```sh
-sudo docker exec -it claude-window-keeper claude setup-token         # Claude
+sudo docker exec -it claude-window-keeper claude                     # Claude
 sudo docker exec -it claude-window-keeper codex login --device-auth  # Codex — Spark도 이걸로 커버됨
 ```
 
-`claude setup-token`은 URL을 출력합니다 — 아무 기기(휴대폰 등)에서 열어 로그인을 승인하면 됩니다.
-`codex login --device-auth`는 코드를 출력합니다 — 아무 브라우저에서나 그 코드로 승인하면 됩니다. 둘 다
-로컬 브라우저나 SSH 포트포워딩이 필요 없습니다. GitHub Secret이나 별도 워크플로우도 거치지 않습니다 —
-예전에 있던 `SYNC-CLAUDE-CREDENTIALS.yaml`(맥→NAS secret 릴레이용)은 이 방식으로 대체되어 삭제됐습니다.
+절차는 위 "최초 배포" 절과 동일합니다(로그인 URL을 `c`로 복사 → 브라우저에서 승인 → 나온 코드를 터미널에
+붙여넣기). GitHub Secret이나 별도 워크플로우도 거치지 않습니다 — 예전에 있던
+`SYNC-CLAUDE-CREDENTIALS.yaml`(맥→NAS secret 릴레이용)은 이 방식으로 대체되어 삭제됐습니다.
 
 로그인 직후 반영 여부를 바로 확인할 수 있습니다:
 

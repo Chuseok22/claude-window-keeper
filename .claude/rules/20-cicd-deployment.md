@@ -55,13 +55,22 @@ Claude/Codex의 OAuth refresh token이 완전히 만료되면(`AuthExpiredError`
 절차:
 
 ```sh
-sudo docker exec -it claude-window-keeper claude setup-token         # Claude
+sudo docker exec -it claude-window-keeper claude                     # Claude
 sudo docker exec -it claude-window-keeper codex login --device-auth  # Codex (Spark 포함, 별도 로그인 불필요)
 ```
 
-각 명령이 출력하는 URL/코드를 아무 기기에서나 열어 승인하면 끝. GitHub Secret이나 별도 워크플로우를 거치지
+`claude`는 자격증명이 없으면 실행 즉시 로그인 URL을 출력합니다 — **반드시 `c` 키로 복사**할 것(터미널
+줄바꿈으로 URL을 손으로 긁으면 `code_challenge` 파라미터가 깨져 "잘못된 OAuth 요청" 에러가 남, 2026-09-07
+실제 배포에서 재현/확인됨). 그 URL을 아무 기기 브라우저에 붙여넣어 승인하면 코드가 뜨고, 그 코드를
+터미널의 "Paste code here" 프롬프트에 붙여넣으면 로그인 완료 — 이후 `/exit`나 Ctrl+C로 대화형 세션에서
+나오면 됨. `codex login --device-auth`는 코드를 출력합니다 — 아무 브라우저에서나 그 코드로 승인하면
+됩니다. 둘 다 로컬 브라우저나 SSH 포트포워딩이 필요 없습니다. GitHub Secret이나 별도 워크플로우를 거치지
 않습니다 — 이전에 있던 `SYNC-CLAUDE-CREDENTIALS.yaml`(맥→NAS secret 릴레이용)은 이 방식으로 대체되어
 삭제되었습니다.
+
+(`claude setup-token`은 이 용도로 쓰면 안 됩니다 — 자격증명 파일을 쓰지 않고 CI용 1년짜리 토큰을 화면에
+출력만 하며, 그 토큰은 이 프로젝트가 쓰는 `/api/oauth/usage` 엔드포인트에서 403으로 거부됨을 실제로
+확인함.)
 
 **컨테이너 재시작이나 재배포는 필요 없습니다.** `internal/provider/provider.go`의 `fetchWithAuth`가 API
 401 응답마다 `Reload()`로 디스크에서 자격증명을 다시 읽으므로(`internal/auth/claude.go`,
@@ -106,7 +115,7 @@ sudo docker exec -it claude-window-keeper codex login --device-auth  # Codex (Sp
 | 시크릿 | 어디서 오나 | 어떻게 컨테이너에 도달하나 |
 |---|---|---|
 | `DISCORD_WEBHOOK_URL` | GitHub Secret `ENV_FILE`의 내용 (`.env` 형식) | CI가 빌드 직전에 `.env` 파일로 씀 → Dockerfile이 이미지에 구움 → entrypoint.sh가 소싱 |
-| OAuth 자격증명(`.credentials.json`, `auth.json`) | NAS 컨테이너 내부에서 `claude setup-token`/`codex login --device-auth`로 직접 로그인(사람이 `docker exec -it`) | 이미지가 아니라 **볼륨 마운트**로만 관리 — 재발급/refresh로 계속 바뀌는 데이터라 이미지에 구우면 안 됨 |
+| OAuth 자격증명(`.credentials.json`, `auth.json`) | NAS 컨테이너 내부에서 `claude`(bare)/`codex login --device-auth`로 직접 로그인(사람이 `docker exec -it`) | 이미지가 아니라 **볼륨 마운트**로만 관리 — 재발급/refresh로 계속 바뀌는 데이터라 이미지에 구우면 안 됨 |
 
 `DISCORD_NOTIFY_ON_SUCCESS`도 이미지에 구워지는 값이다(정적 시크릿은 아니지만 같은 `.env` 경로를 탄다).
 기본값이 `true`(켜짐)이라 이 값을 명시적으로 `.env`/`ENV_FILE`에 넣지 않아도 성공 알림은 그대로 나간다 —
